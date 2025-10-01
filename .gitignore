@@ -49,6 +49,9 @@ config/system_profile.yaml
 .pydevproject
 .settings/
 
+# Claude Code
+.claude/
+
 # macOS
 .DS_Store
 .AppleDouble
