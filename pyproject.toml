@@ -1,8 +1,39 @@
 [project]
 name = "quantmini"
 version = "0.1.0"
-description = "High-Performance Data Pipeline for Financial Market Data"
+description = "High-Performance Data Pipeline for Financial Market Data with Qlib Integration"
+readme = "README.md"
 requires-python = ">=3.10"
+license = {text = "MIT"}
+authors = [
+    {name = "Zheyuan Zhao", email = "your-email@example.com"}
+]
+maintainers = [
+    {name = "Zheyuan Zhao", email = "your-email@example.com"}
+]
+keywords = [
+    "quantitative-finance",
+    "trading",
+    "qlib",
+    "machine-learning",
+    "algorithmic-trading",
+    "polygon-io",
+    "data-pipeline",
+    "alpha-factors",
+]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Financial and Insurance Industry",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Office/Business :: Financial :: Investment",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
 dependencies = [
     "pyarrow>=18.1.0",
     "polars>=1.18.0",
@@ -15,11 +46,28 @@ dependencies = [
     "pyqlib>=0.9.0",
 ]
 
+[project.urls]
+Homepage = "https://github.com/nittygritty-zzy/quantmini"
+Documentation = "https://github.com/nittygritty-zzy/quantmini#readme"
+Repository = "https://github.com/nittygritty-zzy/quantmini"
+Issues = "https://github.com/nittygritty-zzy/quantmini/issues"
+Changelog = "https://github.com/nittygritty-zzy/quantmini/blob/main/docs/changelog/README.md"
+
 [project.optional-dependencies]
 dev = [
     "pytest>=8.3.4",
     "pytest-asyncio>=0.25.2",
     "pytest-cov>=6.0.0",
+]
+ml = [
+    "lightgbm>=4.5.0",
+    "xgboost>=2.1.0",
+    "catboost>=1.2.7",
+    "scikit-learn>=1.5.0",
+    "gymnasium>=1.0.0",
+]
+all = [
+    "quantmini[dev,ml]",
 ]
 
 [build-system]

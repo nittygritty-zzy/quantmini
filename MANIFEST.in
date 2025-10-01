@@ -1,0 +1,40 @@
+# Include documentation
+include README.md
+include LICENSE
+include pyproject.toml
+
+# Include configuration examples
+recursive-include config *.yaml.example
+recursive-include config *.example
+
+# Include documentation
+recursive-include docs *.md
+recursive-include docs *.csv
+
+# Include examples
+recursive-include examples *.py
+recursive-include examples *.yaml
+recursive-include examples *.md
+
+# Exclude build artifacts
+global-exclude __pycache__
+global-exclude *.py[cod]
+global-exclude .DS_Store
+global-exclude *.so
+
+# Exclude credentials and sensitive files
+exclude config/credentials.yaml
+exclude config/system_profile.yaml
+exclude .env
+exclude .env.local
+
+# Exclude data directories
+prune data/
+prune logs/
+prune mlruns/
+prune catboost_info/
+
+# Exclude development files
+prune .venv/
+prune .pytest_cache/
+prune .mypy_cache/
