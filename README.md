@@ -109,14 +109,15 @@ Edit `config/pipeline_config.yaml` to customize:
 - **Features**: Configure which features to compute
 - **Optimizations**: Enable Apple Silicon, async downloads, etc.
 
-See [CONFIGURATION.md](docs/CONFIGURATION.md) for details.
+See [Installation Guide](docs/getting-started/installation.md) for configuration details.
 
 ## 📚 Documentation
 
-- **[Implementation Plan](IMPLEMENTATION_PLAN.md)**: 28-week roadmap
-- **[Project Memory](docs/PROJECT_MEMORY.md)**: Design principles and patterns
-- **[Project Structure](docs/PROJECT_STRUCTURE.md)**: Complete directory layout
-- **[Design Doc](pipeline_design/mac-optimized-pipeline.md)**: Architecture details
+- **[Architecture Overview](docs/architecture/overview.md)**: System architecture and design
+- **[Data Pipeline](docs/architecture/data-pipeline.md)**: Pipeline architecture details
+- **[Changelog](docs/changelog/README.md)**: Version history and updates
+- **[Contributing Guide](docs/development/contributing.md)**: Development guidelines
+- **Full documentation**: [https://quantmini.readthedocs.io/](https://quantmini.readthedocs.io/)
 
 ## 🧪 Testing
 
@@ -214,20 +215,11 @@ export PIPELINE_MODE=streaming
 # Run and check logs/performance/
 ```
 
-See [TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md) for more.
+See the [full documentation](https://quantmini.readthedocs.io/) for more troubleshooting tips.
 
 ## 🤝 Contributing
 
-See [CONTRIBUTING.md](docs/CONTRIBUTING.md) for development guidelines.
-
-## 📈 Performance Tuning
-
-See [PERFORMANCE_TUNING.md](docs/PERFORMANCE_TUNING.md) for:
-- Apple Silicon optimizations
-- Memory tuning
-- Storage optimization
-- Query performance
-- Benchmarking
+See [Contributing Guide](docs/development/contributing.md) for development guidelines.
 
 ## 📄 License
 
