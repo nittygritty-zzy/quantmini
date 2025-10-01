@@ -4,6 +4,7 @@ A production-ready data pipeline for processing Polygon.io S3 flat files into op
 
 ## 🎯 Key Features
 
+- **Command-Line Interface**: Complete CLI for all operations (`quantmini` command)
 - **Adaptive Processing**: Automatically scales from 24GB workstations to 100GB+ servers
 - **70%+ Compression**: Optimized Parquet and binary formats
 - **Sub-Second Queries**: Partitioned data lake with predicate pushdown
@@ -69,12 +70,26 @@ python -m src.core.system_profiler
 ### First Run
 
 ```bash
-# Run daily pipeline (processes latest data)
-python scripts/run_daily_pipeline.py
+# Initialize configuration
+quantmini config init
+
+# Edit credentials (add your Polygon.io API keys)
+nano config/credentials.yaml
+
+# Run daily pipeline
+quantmini pipeline daily --data-type stocks_daily
 
 # Or backfill historical data
-python scripts/run_backfill.py --start-date 2024-01-01 --end-date 2024-12-31
+quantmini pipeline run --data-type stocks_daily --start-date 2024-01-01 --end-date 2024-12-31
+
+# Query data
+quantmini data query --data-type stocks_daily \
+  --symbols AAPL MSFT \
+  --fields date close volume \
+  --start-date 2024-01-01 --end-date 2024-01-31
 ```
+
+See [CLI.md](CLI.md) for complete CLI documentation.
 
 ## 📁 Project Structure
 
