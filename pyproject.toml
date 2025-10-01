@@ -66,8 +66,14 @@ ml = [
     "scikit-learn>=1.5.0",
     "gymnasium>=1.0.0",
 ]
+docs = [
+    "sphinx>=7.0.0",
+    "sphinx-rtd-theme>=2.0.0",
+    "myst-parser>=2.0.0",
+    "sphinx-autodoc-typehints>=1.25.0",
+]
 all = [
-    "quantmini[dev,ml]",
+    "quantmini[dev,ml,docs]",
 ]
 
 [build-system]

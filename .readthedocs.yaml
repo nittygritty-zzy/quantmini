@@ -1,0 +1,35 @@
+# Read the Docs configuration file for QuantMini
+# See https://docs.readthedocs.io/en/stable/config-file/v2.html for details
+
+version: 2
+
+# Build documentation in the "docs_source/" directory with Sphinx
+build:
+  os: ubuntu-22.04
+  tools:
+    python: "3.10"
+  jobs:
+    post_create_environment:
+      # Install poetry
+      - pip install poetry
+    post_install:
+      # Install dependencies with poetry
+      - VIRTUAL_ENV=$READTHEDOCS_VIRTUALENV_PATH poetry install --with docs
+
+# Build documentation with Sphinx
+sphinx:
+  configuration: docs_source/conf.py
+  fail_on_warning: false
+
+# Optional: build all formats (PDF, ePub, HTML)
+formats:
+  - pdf
+  - epub
+
+# Python requirements
+python:
+  install:
+    - method: pip
+      path: .
+      extra_requirements:
+        - docs
