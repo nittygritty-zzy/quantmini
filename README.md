@@ -240,7 +240,7 @@ See [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md) for detailed timeline.
 
 ## 📄 License
 
-[Add your license here]
+MIT License - see [LICENSE](LICENSE) file for details
 
 ## 🙏 Acknowledgments
 
@@ -251,9 +251,9 @@ See [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md) for detailed timeline.
 
 ## 📧 Support
 
-- Documentation: [docs/](docs/)
-- Issues: [GitHub Issues](https://github.com/your-repo/issues)
-- Email: your-email@example.com
+- Documentation: [https://quantmini.readthedocs.io/](https://quantmini.readthedocs.io/)
+- Issues: [GitHub Issues](https://github.com/nittygritty-zzy/quantmini/issues)
+- Email: zheyuan28@gmail.com
 
 ---
 
