@@ -44,6 +44,7 @@ dependencies = [
     "psutil>=6.1.1",
     "duckdb>=1.0.0",
     "pyqlib>=0.9.0",
+    "click>=8.1.0",
 ]
 
 [project.urls]
@@ -52,6 +53,9 @@ Documentation = "https://github.com/nittygritty-zzy/quantmini#readme"
 Repository = "https://github.com/nittygritty-zzy/quantmini"
 Issues = "https://github.com/nittygritty-zzy/quantmini/issues"
 Changelog = "https://github.com/nittygritty-zzy/quantmini/blob/main/docs/changelog/README.md"
+
+[project.scripts]
+quantmini = "src.cli.main:cli"
 
 [project.optional-dependencies]
 dev = [
