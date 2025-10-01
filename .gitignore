@@ -1,0 +1,98 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+.venv/
+*.egg-info/
+dist/
+build/
+*.egg
+
+# UV package manager
+.uv/
+
+# Data directories (CRITICAL - DO NOT COMMIT DATA!)
+data/
+!data/.gitkeep
+
+# Logs
+logs/
+*.log
+
+# ML experiment tracking
+mlruns/
+catboost_info/
+
+# Configuration with secrets (CRITICAL - DO NOT COMMIT CREDENTIALS!)
+config/credentials.yaml
+config/system_profile.yaml
+
+# Environment variables
+.env
+.env.local
+
+# Jupyter Notebooks
+.ipynb_checkpoints/
+*.ipynb
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.project
+.pydevproject
+.settings/
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+
+# Performance profiling
+*.prof
+*.pstats
+
+# Temporary files
+temp/
+tmp/
+*.tmp
+*.bak
+*.cache
+
+# Saved models (examples only)
+examples/*.pkl
+examples/*.h5
+examples/*.pt
+examples/*.joblib
+
+# Test coverage
+.coverage
+htmlcov/
+.pytest_cache/
+.tox/
+.nox/
+
+# Type checking
+.mypy_cache/
+.dmypy.json
+dmypy.json
+.pyre/
+.pytype/
+
+# Documentation builds
+docs/_build/
+site/
+
+# Backup files
+*.backup
+*~
+
+# Local configuration overrides
+local_config.yaml

@@ -1,0 +1,221 @@
+# Pipeline Configuration
+# This file contains all configurable settings for the data pipeline
+
+# Data root directory (can be overridden by DATA_ROOT environment variable)
+data_root: /Volumes/sandisk/quantmini-data
+
+pipeline:
+  # Processing mode: adaptive, streaming, batch, or parallel
+  # 'adaptive' auto-selects based on system capabilities (recommended)
+  mode: adaptive
+
+  # Data types to process
+  data_types:
+    - stocks_daily
+    - stocks_minute
+    - options_daily
+    - options_minute
+
+# Data source settings
+source:
+  s3:
+    endpoint: "https://files.polygon.io"
+    bucket: "flatfiles"
+    max_retries: 5
+    retry_delay_seconds: 5
+    timeout_seconds: 60
+
+# Processing settings
+processing:
+  # Enable/disable pipeline stages
+  enable_validation: true
+  enable_enrichment: true
+  enable_binary_conversion: true
+
+  # Garbage collection frequency (every N chunks)
+  gc_frequency: 5
+
+  # Memory monitoring
+  memory_check_interval: 100  # Check every N records
+  memory_threshold_percent: 80  # Trigger GC at this threshold
+
+# Parquet storage settings
+parquet:
+  # Compression: snappy (fast) or zstd (better compression)
+  compression: zstd
+  compression_level: 3
+
+  # Advanced settings
+  use_dictionary: true
+  write_statistics: true
+
+  # Row group sizes by mode (auto-adjusted based on system profile)
+  row_group_size:
+    streaming: 50000
+    batch: 100000
+    parallel: 1000000
+
+# Binary format settings
+binary:
+  # Enable binary format conversion
+  enabled: true
+
+  # Data types for binary conversion
+  float_type: float32  # float32 or float64
+
+  # Parallel conversion workers
+  max_workers: 4
+
+# Feature engineering
+features:
+  # Stock daily features
+  stocks_daily:
+    - alpha_daily        # -ln(close / prev_close)
+    - price_range        # high - low
+    - daily_return       # (close / open) - 1
+    - vwap              # Volume-weighted average price
+    - relative_volume   # volume / 20-day avg volume
+
+  # Stock minute features
+  stocks_minute:
+    - alpha_minute
+    - price_velocity
+    - minute_return
+
+  # Options daily features
+  options_daily:
+    - moneyness         # strike / underlying_price
+    - days_to_expiry
+    - relative_volume
+
+  # Options minute features
+  options_minute:
+    - bid_ask_spread
+    - volume_imbalance
+
+# Query engine settings
+query:
+  # Query engine: duckdb or polars
+  # 'auto' selects based on system memory
+  engine: auto
+
+  # Cache settings
+  cache:
+    enabled: true
+    max_size_gb: 2.0
+    eviction_policy: lru
+
+  # DuckDB settings
+  duckdb:
+    temp_directory: "/tmp/duckdb_temp"
+    enable_optimizer: true
+    enable_profiling: false
+
+# Incremental processing
+incremental:
+  # Watermark file location (relative to data_root)
+  watermark_dir: "metadata"
+
+  # Backfill settings
+  backfill:
+    # Start date for initial backfill (YYYY-MM-DD)
+    start_date: "2020-01-01"
+
+    # Batch size for backfill (days per batch)
+    batch_size: 30
+
+    # Delay between batches (seconds)
+    batch_delay: 10
+
+# Maintenance settings
+maintenance:
+  # Partition compaction
+  compaction:
+    enabled: true
+    min_file_size_mb: 100
+    target_file_size_mb: 500
+
+  # Data archiving
+  archiving:
+    enabled: true
+    archive_expired_options: true
+    retention_days: 1825  # 5 years
+
+# Performance optimizations
+optimizations:
+  # Apple Silicon optimizations
+  apple_silicon:
+    enabled: auto  # auto, true, false
+    use_accelerate: true
+    use_mps: false  # Metal Performance Shaders (future)
+
+  # Async S3 downloads
+  async_downloads:
+    enabled: true
+    max_concurrent: 8
+    connection_pool_size: 50
+
+  # Polars vs Pandas
+  prefer_polars: true
+
+  # macOS file I/O optimizations
+  macos_io:
+    enabled: auto
+    enable_readahead: true
+    disable_atime: true
+    preallocate_files: true
+
+# Monitoring and alerting
+monitoring:
+  # Performance profiling
+  profiling:
+    enabled: false  # Enable for debugging
+    output_dir: "logs/performance"
+
+  # Health monitoring
+  health_check:
+    enabled: true
+    check_interval_minutes: 5
+    data_freshness_threshold_hours: 48
+
+  # Alerting
+  alerts:
+    enabled: false
+    email:
+      enabled: false
+      smtp_host: "smtp.gmail.com"
+      smtp_port: 587
+      from_address: "alerts@yourcompany.com"
+      to_addresses:
+        - "admin@yourcompany.com"
+    slack:
+      enabled: false
+      webhook_url: "https://hooks.slack.com/services/YOUR/WEBHOOK/URL"
+
+# Logging
+logging:
+  level: INFO  # DEBUG, INFO, WARNING, ERROR, CRITICAL
+  format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+
+  # Log file settings
+  files:
+    pipeline: "logs/pipeline/pipeline_{date}.log"
+    errors: "logs/errors/errors_{date}.log"
+    performance: "logs/performance/performance_metrics.json"
+
+  # Log rotation
+  rotation:
+    max_size_mb: 100
+    backup_count: 10
+
+  # Console output
+  console:
+    enabled: true
+    level: INFO
+
+# Resource limits (override auto-detection)
+# Leave commented to use auto-detected values
+resources:
+  # max_memory_gb: 20
+  # max_workers: 8
+  # chunk_size: 10000
