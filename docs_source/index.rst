@@ -51,13 +51,23 @@ Check out our :doc:`getting_started` guide or explore the :doc:`examples/index`.
 
 .. toctree::
    :maxdepth: 2
-   :caption: Contents:
+   :caption: User Guide:
 
    getting_started
    installation
    guides/index
    examples/index
+
+.. toctree::
+   :maxdepth: 2
+   :caption: API Reference:
+
    api/index
+
+.. toctree::
+   :maxdepth: 1
+   :caption: About:
+
    changelog
 
 .. toctree::
