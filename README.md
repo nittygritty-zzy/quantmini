@@ -229,15 +229,6 @@ See [PERFORMANCE_TUNING.md](docs/PERFORMANCE_TUNING.md) for:
 - Query performance
 - Benchmarking
 
-## 🗺️ Roadmap
-
-- [x] Phase 0-4: Core pipeline (Weeks 1-10)
-- [ ] Phase 5-8: Features and queries (Weeks 11-18)
-- [ ] Phase 9-11: Orchestration and optimization (Weeks 19-24)
-- [ ] Phase 12-14: Monitoring and production (Weeks 25-28)
-
-See [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md) for detailed timeline.
-
 ## 📄 License
 
 MIT License - see [LICENSE](LICENSE) file for details
