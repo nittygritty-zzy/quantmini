@@ -229,13 +229,10 @@ class QlibBinaryWriter:
         try:
             # Query unique trading days
             input_pattern = self.enriched_root / data_type / '**/*.parquet'
-            time_col = self._get_time_column(data_type)
 
-            # For minute data, extract date from timestamp
-            if 'minute' in data_type:
-                date_expr = f"CAST({time_col} AS DATE)"
-            else:
-                date_expr = time_col
+            # All parquet files have 'date' column now (added during ingestion)
+            # Use it directly instead of casting timestamp
+            date_expr = 'date'
 
             dates_df = self.conn.execute(f"""
                 SELECT DISTINCT {date_expr} as date
