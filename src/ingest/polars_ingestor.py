@@ -249,9 +249,9 @@ class PolarsIngestor(BaseIngestor):
         if 'date' not in df.columns and 'timestamp' in df.columns:
             # Handle both string and integer (Unix timestamp) formats
             if df['timestamp'].dtype in [pl.Int64, pl.Int32, pl.UInt64, pl.UInt32]:
-                # Unix timestamp in nanoseconds or milliseconds
+                # Unix timestamp in nanoseconds - convert directly to datetime then to date
                 df = df.with_columns(
-                    (pl.col('timestamp') / 1_000_000_000).cast(pl.Int64).cast(pl.Datetime('ns')).cast(pl.Date).alias('date')
+                    pl.col('timestamp').cast(pl.Datetime('ns', time_zone='UTC')).cast(pl.Date).alias('date')
                 )
             else:
                 # String timestamp
