@@ -22,6 +22,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from src.core.config_loader import ConfigLoader
 from src.orchestration.ingestion_orchestrator import IngestionOrchestrator
+from src.utils.market_calendar import get_default_calendar
 
 # Setup logging
 logging.basicConfig(
@@ -66,6 +67,22 @@ async def backfill_data(
     logger.info(f"Data types: {data_types}")
     logger.info(f"Incremental: {incremental}")
     logger.info(f"Use Polars: {use_polars}")
+
+    # Show calendar filtering info for daily data
+    if any('daily' in dt for dt in data_types):
+        calendar = get_default_calendar()
+        start_dt = datetime.strptime(start_date, '%Y-%m-%d').date()
+        end_dt = datetime.strptime(end_date, '%Y-%m-%d').date()
+
+        trading_days = calendar.get_trading_days(start_dt, end_dt)
+        total_days = (end_dt - start_dt).days + 1
+        skipped = total_days - len(trading_days)
+
+        if skipped > 0:
+            logger.info(f"\n📅 Calendar Filtering (for daily data):")
+            logger.info(f"   Total days: {total_days}")
+            logger.info(f"   Trading days: {len(trading_days)}")
+            logger.info(f"   Skipped: {skipped} weekends/holidays")
 
     # Backfill each data type
     results = {}

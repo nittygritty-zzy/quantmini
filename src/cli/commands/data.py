@@ -12,6 +12,41 @@ from src.features import FeatureEngineer
 from src.transform import QlibBinaryWriter
 from src.query import QueryEngine
 from src.storage import MetadataManager
+from src.utils.market_calendar import get_default_calendar
+
+
+def validate_date_range(data_type: str, start_date: str, end_date: str) -> None:
+    """
+    Validate date range and show trading day info for daily data.
+
+    Args:
+        data_type: Type of data (e.g., 'stocks_daily')
+        start_date: Start date string (YYYY-MM-DD)
+        end_date: End date string (YYYY-MM-DD)
+    """
+    if 'daily' not in data_type:
+        return
+
+    calendar = get_default_calendar()
+
+    try:
+        start_dt = datetime.strptime(start_date, '%Y-%m-%d').date()
+        end_dt = datetime.strptime(end_date, '%Y-%m-%d').date()
+    except ValueError as e:
+        click.echo(f"❌ Invalid date format: {e}", err=True)
+        raise click.Abort()
+
+    # Get trading days
+    trading_days = calendar.get_trading_days(start_dt, end_dt)
+    total_days = (end_dt - start_dt).days + 1
+    skipped = total_days - len(trading_days)
+
+    if skipped > 0:
+        click.echo(f"📅 Calendar Info:")
+        click.echo(f"   Total days: {total_days}")
+        click.echo(f"   Trading days: {len(trading_days)}")
+        click.echo(f"   Weekends/holidays: {skipped} (will be skipped)")
+        click.echo("")
 
 
 @click.group()
@@ -21,7 +56,7 @@ def data():
 
 
 @data.command()
-@click.option('--data-type', '-t', 
+@click.option('--data-type', '-t',
               type=click.Choice(['stocks_daily', 'stocks_minute', 'options_daily', 'options_minute']),
               required=True,
               help='Type of data to download')
@@ -30,18 +65,21 @@ def data():
 @click.option('--output', '-o', type=click.Path(), help='Output directory')
 def download(data_type, start_date, end_date, output):
     """Download data from Polygon.io S3."""
-    
+
+    # Validate date range and show calendar info
+    validate_date_range(data_type, start_date, end_date)
+
     config = ConfigLoader()
     credentials = config.get_credentials('polygon')
-    
+
     if not credentials:
         click.echo("❌ Error: Polygon credentials not found. Run 'quantmini config init' first.", err=True)
         return
-    
+
     catalog = S3Catalog()
     output_dir = Path(output) if output else Path('data/raw')
     output_dir.mkdir(parents=True, exist_ok=True)
-    
+
     click.echo(f"📥 Downloading {data_type} from {start_date} to {end_date}...")
     
     async def download_data():
@@ -80,11 +118,14 @@ def download(data_type, start_date, end_date, output):
 @click.option('--incremental/--full', default=True, help='Incremental or full ingestion')
 def ingest(data_type, start_date, end_date, mode, incremental):
     """Ingest data into Parquet format."""
-    
+
+    # Validate date range and show calendar info
+    validate_date_range(data_type, start_date, end_date)
+
     from src.orchestration import IngestionOrchestrator
-    
+
     config = ConfigLoader()
-    
+
     click.echo(f"📊 Ingesting {data_type} from {start_date} to {end_date}...")
     click.echo(f"   Mode: {mode}, Incremental: {incremental}")
     
@@ -123,9 +164,12 @@ def ingest(data_type, start_date, end_date, mode, incremental):
 @click.option('--incremental/--full', default=True, help='Incremental or full enrichment')
 def enrich(data_type, start_date, end_date, incremental):
     """Add features to ingested data."""
-    
+
+    # Validate date range and show calendar info
+    validate_date_range(data_type, start_date, end_date)
+
     config = ConfigLoader()
-    
+
     click.echo(f"⚙️  Enriching {data_type} from {start_date} to {end_date}...")
     
     with FeatureEngineer(
@@ -155,9 +199,12 @@ def enrich(data_type, start_date, end_date, incremental):
 @click.option('--incremental/--full', default=True, help='Incremental or full conversion')
 def convert(data_type, start_date, end_date, incremental):
     """Convert enriched data to Qlib binary format."""
-    
+
+    # Validate date range and show calendar info
+    validate_date_range(data_type, start_date, end_date)
+
     config = ConfigLoader()
-    
+
     click.echo(f"🔄 Converting {data_type} to Qlib binary format...")
     
     with QlibBinaryWriter(

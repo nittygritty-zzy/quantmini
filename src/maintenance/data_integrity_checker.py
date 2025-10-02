@@ -30,6 +30,7 @@ from ..core.config_loader import ConfigLoader
 from ..core.exceptions import PipelineException
 from ..orchestration.ingestion_orchestrator import IngestionOrchestrator
 from ..transform.qlib_binary_writer import QlibBinaryWriter
+from ..utils.market_calendar import get_default_calendar
 
 logger = logging.getLogger(__name__)
 
@@ -80,6 +81,9 @@ class DataIntegrityChecker:
 
         # Data types to check
         self.data_types = ['stocks_daily', 'stocks_minute', 'options_daily']
+
+        # Market calendar for validating trading days
+        self.market_calendar = get_default_calendar()
 
         logger.info(f"DataIntegrityChecker initialized")
         logger.info(f"  Parquet root: {self.parquet_root}")
@@ -173,6 +177,36 @@ class DataIntegrityChecker:
 
         return gaps
 
+    def _filter_trading_day_gaps(self, gaps: List[tuple], data_type: str) -> List[tuple]:
+        """
+        Filter out gaps that are only weekends/holidays (not actual missing data)
+
+        Args:
+            gaps: List of (start_date, end_date) tuples
+            data_type: Data type (only filter for daily data)
+
+        Returns:
+            List of gaps that contain actual trading days
+        """
+        if 'daily' not in data_type:
+            return gaps
+
+        filtered_gaps = []
+
+        for start_str, end_str in gaps:
+            start_date = datetime.strptime(start_str, '%Y-%m-%d').date()
+            end_date = datetime.strptime(end_str, '%Y-%m-%d').date()
+
+            # Check if any trading days in this gap
+            trading_days = self.market_calendar.get_trading_days(start_date, end_date)
+
+            if trading_days:
+                # This gap contains actual trading days - real missing data!
+                filtered_gaps.append((start_str, end_str))
+            # else: gap is only weekends/holidays, ignore
+
+        return filtered_gaps
+
     def check_data_type(self, data_type: str) -> Dict[str, Any]:
         """
         Check integrity for a specific data type
@@ -214,6 +248,10 @@ class DataIntegrityChecker:
         # Find gaps
         parquet_gaps = self._find_date_gaps(parquet_dates)
         qlib_gaps = self._find_date_gaps(qlib_dates)
+
+        # Filter out weekend/holiday gaps for daily data
+        parquet_gaps = self._filter_trading_day_gaps(parquet_gaps, data_type)
+        qlib_gaps = self._filter_trading_day_gaps(qlib_gaps, data_type)
 
         # Find dates in parquet but not in qlib (need conversion)
         missing_in_qlib = parquet_dates - qlib_dates

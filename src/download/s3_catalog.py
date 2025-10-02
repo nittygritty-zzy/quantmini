@@ -13,6 +13,8 @@ from datetime import datetime, timedelta
 import pandas as pd
 import logging
 
+from ..utils.market_calendar import get_default_calendar
+
 logger = logging.getLogger(__name__)
 
 
@@ -130,7 +132,7 @@ class S3Catalog:
         symbols: Optional[List[str]] = None
     ) -> List[str]:
         """
-        Get S3 keys for a date range
+        Get S3 keys for a date range (excludes weekends and market holidays)
 
         Args:
             data_type: Data type ('stocks_daily', 'stocks_minute', 'options_daily', 'options_minute')
@@ -147,12 +149,11 @@ class S3Catalog:
              'us_stocks_sip/day_aggs_v1/2025/09/2025-09-02.csv.gz',
              'us_stocks_sip/day_aggs_v1/2025/09/2025-09-03.csv.gz']
         """
-        # Generate business days
-        dates = pd.bdate_range(start=start_date, end=end_date)
+        # Generate trading days (excludes weekends and market holidays)
+        date_strings = S3Catalog.get_business_days(start_date, end_date)
         keys = []
 
-        for date in dates:
-            date_str = date.strftime('%Y-%m-%d')
+        for date_str in date_strings:
 
             if data_type == 'stocks_daily':
                 keys.append(self.get_stocks_daily_key(date_str))
@@ -225,7 +226,7 @@ class S3Catalog:
     @staticmethod
     def get_business_days(start_date: str, end_date: str) -> List[str]:
         """
-        Get list of business days between dates
+        Get list of trading days between dates (excludes weekends and market holidays)
 
         Args:
             start_date: Start date (YYYY-MM-DD)
@@ -238,8 +239,12 @@ class S3Catalog:
             >>> S3Catalog.get_business_days('2025-09-26', '2025-09-30')
             ['2025-09-26', '2025-09-29', '2025-09-30']  # Excludes weekend
         """
-        dates = pd.bdate_range(start=start_date, end=end_date)
-        return [d.strftime('%Y-%m-%d') for d in dates]
+        calendar = get_default_calendar()
+        start_dt = datetime.strptime(start_date, '%Y-%m-%d').date()
+        end_dt = datetime.strptime(end_date, '%Y-%m-%d').date()
+
+        trading_days = calendar.get_trading_days(start_dt, end_dt)
+        return [d.isoformat() for d in trading_days]
 
     @staticmethod
     def get_missing_dates(
@@ -248,7 +253,7 @@ class S3Catalog:
         end_date: str
     ) -> List[str]:
         """
-        Get missing business days
+        Get missing trading days (excludes weekends and market holidays)
 
         Args:
             existing_dates: List of dates already processed
@@ -256,7 +261,7 @@ class S3Catalog:
             end_date: End date (YYYY-MM-DD)
 
         Returns:
-            List of missing dates
+            List of missing trading days
 
         Example:
             >>> S3Catalog.get_missing_dates(['2025-09-26'], '2025-09-26', '2025-09-30')

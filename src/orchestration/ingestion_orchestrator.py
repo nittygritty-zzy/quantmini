@@ -22,6 +22,7 @@ from ..storage.metadata_manager import MetadataManager
 from ..core.config_loader import ConfigLoader
 from ..core.system_profiler import SystemProfiler
 from ..core.exceptions import PipelineException
+from ..utils.market_calendar import get_default_calendar
 
 logger = logging.getLogger(__name__)
 
@@ -98,6 +99,9 @@ class IngestionOrchestrator:
         self.profiler = SystemProfiler()
         self.processing_mode = self.profiler.profile['recommended_mode']
 
+        # Market calendar for trading day validation
+        self.market_calendar = get_default_calendar()
+
         # Statistics
         self.statistics = {
             'downloads': 0,
@@ -105,6 +109,7 @@ class IngestionOrchestrator:
             'errors': 0,
             'bytes_downloaded': 0,
             'records_processed': 0,
+            'skipped_non_trading_days': 0,
         }
 
         logger.info(
@@ -149,6 +154,35 @@ class IngestionOrchestrator:
         )
 
         try:
+            # Filter to trading days only for daily data
+            from datetime import datetime as dt, timedelta
+
+            if 'daily' in data_type:
+                start_dt = dt.strptime(start_date, '%Y-%m-%d').date()
+                end_dt = dt.strptime(end_date, '%Y-%m-%d').date()
+
+                # Get trading days in range
+                trading_days = self.market_calendar.get_trading_days(start_dt, end_dt)
+
+                # Count skipped days
+                total_days = (end_dt - start_dt).days + 1
+                skipped = total_days - len(trading_days)
+
+                if skipped > 0:
+                    logger.info(
+                        f"Filtered to {len(trading_days)} trading days "
+                        f"(skipped {skipped} weekends/holidays)"
+                    )
+                    self.statistics['skipped_non_trading_days'] += skipped
+
+                # Reconstruct date range from trading days only
+                if not trading_days:
+                    logger.warning("No trading days in date range")
+                    return {'status': 'no_trading_days', 'ingested': 0}
+
+                start_date = trading_days[0].isoformat()
+                end_date = trading_days[-1].isoformat()
+
             # Get S3 keys
             keys = self.catalog.get_date_range_keys(
                 data_type,

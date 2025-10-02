@@ -99,3 +99,6 @@ site/
 
 # Local configuration overrides
 local_config.yaml
+
+# Generated backfill scripts
+backfill_commands.sh
