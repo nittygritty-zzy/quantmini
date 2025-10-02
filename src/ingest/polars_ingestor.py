@@ -247,9 +247,17 @@ class PolarsIngestor(BaseIngestor):
 
         # Add date column if not present
         if 'date' not in df.columns and 'timestamp' in df.columns:
-            df = df.with_columns(
-                pl.col('timestamp').str.to_date().alias('date')
-            )
+            # Handle both string and integer (Unix timestamp) formats
+            if df['timestamp'].dtype in [pl.Int64, pl.Int32, pl.UInt64, pl.UInt32]:
+                # Unix timestamp in nanoseconds or milliseconds
+                df = df.with_columns(
+                    (pl.col('timestamp') / 1_000_000_000).cast(pl.Int64).cast(pl.Datetime('ns')).cast(pl.Date).alias('date')
+                )
+            else:
+                # String timestamp
+                df = df.with_columns(
+                    pl.col('timestamp').str.to_date().alias('date')
+                )
         elif 'date' not in df.columns:
             from datetime import datetime
             dt = datetime.strptime(date, '%Y-%m-%d').date()

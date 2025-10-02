@@ -2,7 +2,7 @@
 # This file contains all configurable settings for the data pipeline
 
 # Data root directory (can be overridden by DATA_ROOT environment variable)
-data_root: /Volumes/sandisk/quantmini-data
+data_root: /Users/zheyuanzhao/sandisk/quantmini-data/data
 
 pipeline:
   # Processing mode: adaptive, streaming, batch, or parallel
