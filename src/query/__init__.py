@@ -1,4 +1,9 @@
-from .query_cache import QueryCache
-from .query_engine import QueryEngine
+"""Query engine utilities"""
 
-__all__ = ['QueryCache', 'QueryEngine']
+from .query_engine import QueryEngine
+from .query_cache import QueryCache
+
+__all__ = [
+    'QueryEngine',
+    'QueryCache',
+]

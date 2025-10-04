@@ -173,7 +173,7 @@ def enrich(data_type, start_date, end_date, incremental):
     click.echo(f"⚙️  Enriching {data_type} from {start_date} to {end_date}...")
     
     with FeatureEngineer(
-        parquet_root=config.get_data_root() / 'lake',
+        parquet_root=config.get_data_root() / 'parquet',
         enriched_root=config.get_data_root() / 'enriched',
         config=config
     ) as engineer:
@@ -184,9 +184,9 @@ def enrich(data_type, start_date, end_date, incremental):
             incremental=incremental
         )
         
-        click.echo(f"\n✅ Enriched {result['records_processed']:,} records")
-        click.echo(f"   Features added: {result['features_computed']}")
-        click.echo(f"   Time: {result['elapsed_time']:.2f}s")
+        click.echo(f"\n✅ Enriched {result['records_enriched']:,} records")
+        click.echo(f"   Dates processed: {result['dates_processed']}")
+        click.echo(f"   Features added: {result['features_added']}")
 
 
 @data.command()

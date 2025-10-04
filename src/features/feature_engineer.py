@@ -214,14 +214,14 @@ class FeatureEngineer:
                     CREATE OR REPLACE VIEW raw_data AS
                     SELECT *,
                            CAST(timestamp AS DATE) as date
-                    FROM read_parquet('{input_pattern}')
+                    FROM read_parquet('{input_pattern}', union_by_name=true)
                     WHERE CAST(timestamp AS DATE) = '{date}'
                 """)
             else:
                 # Daily data has date column
                 self.conn.execute(f"""
                     CREATE OR REPLACE VIEW raw_data AS
-                    SELECT * FROM read_parquet('{input_pattern}')
+                    SELECT * FROM read_parquet('{input_pattern}', union_by_name=true)
                     WHERE date = '{date}'
                 """)
         except Exception as e:
