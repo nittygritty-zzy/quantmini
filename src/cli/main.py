@@ -1,12 +1,23 @@
 #!/usr/bin/env python3
 """
-QuantMini CLI - Main entry point.
+ QuantMini CLI - Main entry point.
 """
 
 import click
+import logging
+import sys
 from pathlib import Path
 
 from .commands import data, pipeline, config_cmd, validate
+
+
+# Configure logging to show INFO and above to stderr with simple format
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(message)s',
+    stream=sys.stderr,
+    force=True
+)
 
 
 @click.group()
@@ -15,7 +26,7 @@ from .commands import data, pipeline, config_cmd, validate
 def cli(ctx):
     """
     QuantMini - High-Performance Data Pipeline for Financial Market Data.
-    
+
     A production-ready pipeline for processing Polygon.io data with Qlib integration.
     """
     ctx.ensure_object(dict)
