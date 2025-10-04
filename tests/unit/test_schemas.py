@@ -107,7 +107,7 @@ def test_stocks_minute_schema_types():
     assert schema.field('year').type == pa.int16()
     assert schema.field('month').type == pa.int8()
     assert schema.field('volume').type == pa.uint32()
-    assert schema.field('transactions').type == pa.uint16()
+    assert schema.field('transactions').type == pa.uint32()
 
 
 def test_options_daily_schema_types():

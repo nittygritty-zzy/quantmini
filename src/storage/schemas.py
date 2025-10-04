@@ -66,7 +66,7 @@ def get_stocks_minute_schema() -> pa.Schema:
         pa.field('low', pa.float32()),
         pa.field('close', pa.float32()),
         pa.field('volume', pa.uint32()),
-        pa.field('transactions', pa.uint16()),
+        pa.field('transactions', pa.uint32()),
 
         # Enriched features
         pa.field('alpha_minute', pa.float32(), nullable=True),

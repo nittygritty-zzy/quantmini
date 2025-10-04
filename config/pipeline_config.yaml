@@ -2,7 +2,7 @@
 # This file contains all configurable settings for the data pipeline
 
 # Data root directory (can be overridden by DATA_ROOT environment variable)
-data_root: /Users/zheyuanzhao/sandisk/quantmini-data/data
+data_root: /Volumes/sandisk/quantmini-data/data
 
 pipeline:
   # Processing mode: adaptive, streaming, batch, or parallel
@@ -58,7 +58,7 @@ parquet:
 # Binary format settings
 binary:
   # Enable binary format conversion
-  enabled: true
+  enabled: false
 
   # Data types for binary conversion
   float_type: float32  # float32 or float64
