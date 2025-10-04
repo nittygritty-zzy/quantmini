@@ -9,6 +9,7 @@ from src.core import ConfigLoader
 from src.orchestration import IngestionOrchestrator
 from src.features import FeatureEngineer
 from src.transform import QlibBinaryWriter
+from src.utils.market_calendar import get_default_calendar
 
 
 @click.group()
@@ -29,11 +30,33 @@ def pipeline():
 @click.option('--skip-convert', is_flag=True, help='Skip conversion step')
 def run(data_type, start_date, end_date, skip_ingest, skip_enrich, skip_convert):
     """Run complete pipeline: ingest → enrich → convert."""
-    
+
     config = ConfigLoader()
-    
+
     click.echo(f"🚀 Running pipeline for {data_type}")
-    click.echo(f"   Date range: {start_date} to {end_date}\n")
+    click.echo(f"   Date range: {start_date} to {end_date}")
+
+    # Show calendar info for daily data
+    if 'daily' in data_type:
+        calendar = get_default_calendar()
+        try:
+            start_dt = datetime.strptime(start_date, '%Y-%m-%d').date()
+            end_dt = datetime.strptime(end_date, '%Y-%m-%d').date()
+
+            trading_days = calendar.get_trading_days(start_dt, end_dt)
+            total_days = (end_dt - start_dt).days + 1
+            skipped = total_days - len(trading_days)
+
+            if skipped > 0:
+                click.echo(f"📅 Calendar Info:")
+                click.echo(f"   Total days: {total_days}")
+                click.echo(f"   Trading days: {len(trading_days)}")
+                click.echo(f"   Weekends/holidays: {skipped} (will be skipped)")
+        except ValueError as e:
+            click.echo(f"❌ Invalid date format: {e}", err=True)
+            raise click.Abort()
+
+    click.echo("")
     
     async def run_pipeline():
         # Step 1: Ingest
