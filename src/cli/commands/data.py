@@ -70,18 +70,23 @@ def download(data_type, start_date, end_date, output):
     validate_date_range(data_type, start_date, end_date)
 
     config = ConfigLoader()
-    credentials = config.get_credentials('polygon')
+    polygon_creds = config.get_credentials('polygon')
 
-    if not credentials:
-        click.echo("❌ Error: Polygon credentials not found. Run 'quantmini config init' first.", err=True)
+    if not polygon_creds or 's3' not in polygon_creds:
+        click.echo("❌ Error: Polygon S3 credentials not found. Check config/credentials.yaml", err=True)
         return
+
+    credentials = {
+        'access_key_id': polygon_creds['s3']['access_key_id'],
+        'secret_access_key': polygon_creds['s3']['secret_access_key'],
+    }
 
     catalog = S3Catalog()
     output_dir = Path(output) if output else Path('data/raw')
     output_dir.mkdir(parents=True, exist_ok=True)
 
     click.echo(f"📥 Downloading {data_type} from {start_date} to {end_date}...")
-    
+
     async def download_data():
         downloader = AsyncS3Downloader(credentials)
         keys = catalog.get_date_range_keys(data_type, start_date, end_date)
@@ -98,7 +103,7 @@ def download(data_type, start_date, end_date, output):
                     click.echo(f"\n❌ Failed to download {key}: {e}", err=True)
         
         stats = downloader.get_statistics()
-        click.echo(f"\n✅ Downloaded {stats['successful_downloads']} files")
+        click.echo(f"\n✅ Downloaded {stats['download_count']} files")
         click.echo(f"   Success rate: {stats['success_rate']:.1%}")
     
     asyncio.run(download_data())
