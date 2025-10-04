@@ -48,11 +48,17 @@ def run(data_type, start_date, end_date, skip_ingest, skip_enrich, skip_convert)
                 incremental=True,
                 use_polars=True
             )
-            
-            if result['success_rate'] < 1.0:
-                click.echo(f"⚠️  Warning: Ingestion success rate {result['success_rate']:.1%}")
-            
-            click.echo(f"   ✅ Ingested {result['total_records']:,} records\n")
+
+            if result.get('status') in ['no_trading_days', 'no_data']:
+                click.echo(f"   ⚠️  {result.get('status', 'no data')}: No files to ingest\n")
+                return
+
+            success_rate = result.get('success_rate', 1.0)
+            if success_rate < 1.0:
+                click.echo(f"⚠️  Warning: Ingestion success rate {success_rate:.1%}")
+
+            total_records = result.get('total_records', result.get('ingested', 0))
+            click.echo(f"   ✅ Ingested {total_records:,} records\n")
         else:
             click.echo("   ⏭️  Skipping ingestion\n")
         
@@ -61,7 +67,7 @@ def run(data_type, start_date, end_date, skip_ingest, skip_enrich, skip_convert)
             click.echo("⚙️  Step 2/3: Adding features...")
             
             with FeatureEngineer(
-                parquet_root=config.get_data_root() / 'lake',
+                parquet_root=config.get_data_root() / 'parquet',
                 enriched_root=config.get_data_root() / 'enriched',
                 config=config
             ) as engineer:
@@ -71,8 +77,8 @@ def run(data_type, start_date, end_date, skip_ingest, skip_enrich, skip_convert)
                     end_date=end_date,
                     incremental=True
                 )
-                
-                click.echo(f"   ✅ Enriched {result['records_processed']:,} records\n")
+
+                click.echo(f"   ✅ Enriched {result['records_enriched']:,} records ({result['dates_processed']} dates)\n")
         else:
             click.echo("   ⏭️  Skipping enrichment\n")
         
