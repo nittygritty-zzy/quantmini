@@ -105,23 +105,26 @@ def run(data_type, start_date, end_date, skip_ingest, skip_enrich, skip_convert)
         else:
             click.echo("   ⏭️  Skipping enrichment\n")
         
-        # Step 3: Convert
+        # Step 3: Convert (stocks_daily only)
         if not skip_convert:
-            click.echo("🔄 Step 3/3: Converting to Qlib format...")
-            
-            with QlibBinaryWriter(
-                enriched_root=config.get_data_root() / 'enriched',
-                qlib_root=config.get_data_root() / 'binary',
-                config=config
-            ) as writer:
-                result = writer.convert_data_type(
-                    data_type=data_type,
-                    start_date=start_date,
-                    end_date=end_date,
-                    incremental=True
-                )
-                
-                click.echo(f"   ✅ Converted {result['symbols_converted']} symbols\n")
+            if data_type == 'stocks_daily':
+                click.echo("🔄 Step 3/3: Converting to Qlib format...")
+
+                with QlibBinaryWriter(
+                    enriched_root=config.get_data_root() / 'enriched',
+                    qlib_root=config.get_data_root() / 'binary',
+                    config=config
+                ) as writer:
+                    result = writer.convert_data_type(
+                        data_type=data_type,
+                        start_date=start_date,
+                        end_date=end_date,
+                        incremental=True
+                    )
+
+                    click.echo(f"   ✅ Converted {result['symbols_converted']} symbols\n")
+            else:
+                click.echo("   ⏭️  Skipping conversion (only stocks_daily supports Qlib format)\n")
         else:
             click.echo("   ⏭️  Skipping conversion\n")
         
@@ -178,21 +181,25 @@ def daily(data_type, days):
             )
         
         click.echo(f"   ✅ Features added")
-        
-        # Convert
-        with QlibBinaryWriter(
-            enriched_root=config.get_data_root() / 'enriched',
-            qlib_root=config.get_data_root() / 'binary',
-            config=config
-        ) as writer:
-            writer.convert_data_type(
-                data_type=data_type,
-                start_date=start_date,
-                end_date=end_date,
-                incremental=True
-            )
-        
-        click.echo(f"   ✅ Converted to Qlib format\n")
+
+        # Convert (stocks_daily only)
+        if data_type == 'stocks_daily':
+            with QlibBinaryWriter(
+                enriched_root=config.get_data_root() / 'enriched',
+                qlib_root=config.get_data_root() / 'binary',
+                config=config
+            ) as writer:
+                writer.convert_data_type(
+                    data_type=data_type,
+                    start_date=start_date,
+                    end_date=end_date,
+                    incremental=True
+                )
+
+            click.echo(f"   ✅ Converted to Qlib format\n")
+        else:
+            click.echo(f"   ⏭️  Skipping Qlib conversion (only stocks_daily supported)\n")
+
         click.echo("🎉 Daily update complete!")
     
     asyncio.run(run_daily())

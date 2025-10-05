@@ -3,17 +3,13 @@
 Qlib Binary Conversion Script
 
 Convert enriched Parquet data to Qlib binary format for ML/backtesting.
+Only stocks_daily data is supported (Qlib is optimized for daily stock data).
+For other data types, use the enriched parquet format with QueryEngine.
 
 Usage:
-    # Convert single data type
+    # Convert stocks_daily
     python scripts/convert_to_qlib.py \\
         --data-type stocks_daily \\
-        --start-date 2025-08-01 \\
-        --end-date 2025-09-30
-
-    # Convert all data types
-    python scripts/convert_to_qlib.py \\
-        --data-type all \\
         --start-date 2025-08-01 \\
         --end-date 2025-09-30
 
@@ -162,8 +158,8 @@ def main():
     parser.add_argument(
         '--data-type',
         required=True,
-        choices=['stocks_daily', 'stocks_minute', 'options_daily', 'options_minute', 'all'],
-        help='Data type to convert'
+        choices=['stocks_daily'],
+        help='Data type to convert (only stocks_daily supported for Qlib)'
     )
 
     parser.add_argument(
@@ -204,11 +200,8 @@ def main():
 
     args = parser.parse_args()
 
-    # Determine data types
-    if args.data_type == 'all':
-        data_types = ['stocks_daily', 'stocks_minute', 'options_daily', 'options_minute']
-    else:
-        data_types = [args.data_type]
+    # Only stocks_daily is supported
+    data_types = [args.data_type]
 
     # Load config
     config = ConfigLoader()

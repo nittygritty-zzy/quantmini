@@ -145,16 +145,12 @@ def ingest(data_type, start_date, end_date, mode, incremental):
             use_polars=(mode == 'polars')
         )
         
-        if result['dates_succeeded'] > 0:
-            click.echo(f"\n✅ Ingested {result['dates_succeeded']} dates")
-            click.echo(f"   Total records: {result['total_records']:,}")
-            click.echo(f"   Total size: {result['total_size_mb']:.2f} MB")
-            click.echo(f"   Time: {result['elapsed_time']:.2f}s")
-            click.echo(f"   Success rate: {result['success_rate']:.1%}")
-        
-        if result['dates_failed'] > 0:
-            click.echo(f"\n❌ Failed dates: {result['dates_failed']}")
-            click.echo(f"   {', '.join(result.get('failed_dates', []))}")
+        if result.get('ingested', 0) > 0:
+            click.echo(f"\n✅ Ingested {result['ingested']} files")
+            click.echo(f"   Total records: {result.get('records_processed', 0):,}")
+
+        if result.get('failed', 0) > 0:
+            click.echo(f"\n❌ Failed files: {result['failed']}")
     
     asyncio.run(run_ingestion())
 
@@ -196,14 +192,21 @@ def enrich(data_type, start_date, end_date, incremental):
 
 @data.command()
 @click.option('--data-type', '-t',
-              type=click.Choice(['stocks_daily', 'stocks_minute', 'options_daily', 'options_minute']),
+              type=click.Choice(['stocks_daily']),
               required=True,
-              help='Type of data to convert')
+              help='Type of data to convert (only stocks_daily supported for Qlib)')
 @click.option('--start-date', '-s', required=True, help='Start date (YYYY-MM-DD)')
 @click.option('--end-date', '-e', required=True, help='End date (YYYY-MM-DD)')
 @click.option('--incremental/--full', default=True, help='Incremental or full conversion')
 def convert(data_type, start_date, end_date, incremental):
-    """Convert enriched data to Qlib binary format."""
+    """Convert enriched data to Qlib binary format (stocks_daily only)."""
+
+    # Enforce stocks_daily only restriction
+    if data_type != 'stocks_daily':
+        click.echo(f"❌ Error: Qlib conversion only supports stocks_daily data", err=True)
+        click.echo(f"   Other data types (stocks_minute, options_*) should use enriched parquet format", err=True)
+        click.echo(f"   Use 'quantmini data query' to access enriched parquet data", err=True)
+        raise click.Abort()
 
     # Validate date range and show calendar info
     validate_date_range(data_type, start_date, end_date)
@@ -211,21 +214,23 @@ def convert(data_type, start_date, end_date, incremental):
     config = ConfigLoader()
 
     click.echo(f"🔄 Converting {data_type} to Qlib binary format...")
-    
-    with QlibBinaryWriter(
+
+    writer = QlibBinaryWriter(
         enriched_root=config.get_data_root() / 'enriched',
-        qlib_root=config.get_data_root() / 'binary',
+        qlib_root=config.get_data_root() / 'qlib',
         config=config
-    ) as writer:
-        result = writer.convert_data_type(
-            data_type=data_type,
-            start_date=start_date,
-            end_date=end_date,
-            incremental=incremental
-        )
-        
-        click.echo(f"\n✅ Converted {result['symbols_converted']} symbols")
-        click.echo(f"   Features: {result['features_written']}")
+    )
+
+    result = writer.convert_data_type(
+        data_type=data_type,
+        start_date=start_date,
+        end_date=end_date,
+        incremental=incremental
+    )
+
+    click.echo(f"\n✅ Converted {result['symbols_converted']} symbols")
+    click.echo(f"   Features: {result['features_written']}")
+    if 'elapsed_time' in result:
         click.echo(f"   Time: {result['elapsed_time']:.2f}s")
 
 

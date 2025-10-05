@@ -68,12 +68,12 @@ class DataIntegrityChecker:
         """
         self.config = config or ConfigLoader()
 
-        self.parquet_root = parquet_root or Path(
-            self.config.get('storage.parquet_root', 'data/parquet')
+        self.parquet_root = parquet_root or (
+            self.config.get_data_root() / 'parquet'
         )
 
-        self.qlib_root = qlib_root or Path(
-            self.config.get('transform.qlib_root', 'data/qlib')
+        self.qlib_root = qlib_root or (
+            self.config.get_data_root() / 'binary'
         )
 
         # DuckDB for parquet queries

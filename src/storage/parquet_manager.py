@@ -457,7 +457,7 @@ def main():
 
     try:
         config = ConfigLoader()
-        root_path = Path(config.get('storage.parquet_root', 'data/parquet'))
+        root_path = config.get_data_root() / 'parquet'
 
         print("✅ ParquetManager initialized")
         print(f"   Root: {root_path}")

@@ -242,7 +242,7 @@ def main():
     print("="*70)
 
     # Initialize Qlib
-    qlib_path = Path("/Volumes/sandisk/quantmini-data/data/qlib/stocks_daily")
+    qlib_path = Path("/Volumes/sandisk/quantmini-data/data/data/qlib/stocks_daily")
 
     if not qlib_path.exists():
         print(f"\n❌ Qlib data not found at {qlib_path}")

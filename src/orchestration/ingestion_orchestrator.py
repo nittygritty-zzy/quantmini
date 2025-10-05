@@ -86,11 +86,11 @@ class IngestionOrchestrator:
         )
 
         # Parquet and metadata managers
-        self.parquet_root = parquet_root or Path(
-            self.config.get('storage.parquet_root', 'data/parquet')
+        self.parquet_root = parquet_root or (
+            self.config.get_data_root() / 'parquet'
         )
-        self.metadata_root = metadata_root or Path(
-            self.config.get('storage.metadata_root', 'data/metadata')
+        self.metadata_root = metadata_root or (
+            self.config.get_data_root() / 'metadata'
         )
 
         self.metadata_manager = MetadataManager(self.metadata_root)
