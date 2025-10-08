@@ -119,12 +119,12 @@ class QlibBinaryWriter:
 
             # Step 1: Generate instruments file
             logger.info("Step 1: Generating instruments file...")
-            symbols = self._generate_instruments(data_type, output_dir, start_date, end_date)
+            symbols = self._generate_instruments(data_type, output_dir, start_date, end_date, incremental)
             logger.info(f"  Found {len(symbols)} symbols")
 
             # Step 2: Generate calendar file
             logger.info("Step 2: Generating calendar file...")
-            trading_days = self._generate_calendar(data_type, start_date, end_date, output_dir)
+            trading_days = self._generate_calendar(data_type, start_date, end_date, output_dir, incremental)
             logger.info(f"  Found {len(trading_days)} trading days")
 
             # Step 3: Convert features for each symbol
@@ -162,7 +162,7 @@ class QlibBinaryWriter:
         except Exception as e:
             raise QlibBinaryWriterError(f"Failed to convert {data_type}: {e}")
 
-    def _generate_instruments(self, data_type: str, output_dir: Path, start_date: str, end_date: str) -> List[str]:
+    def _generate_instruments(self, data_type: str, output_dir: Path, start_date: str, end_date: str, incremental: bool = True) -> List[str]:
         """
         Generate instruments/all.txt in Qlib format (tab-separated with date ranges)
 
@@ -171,6 +171,7 @@ class QlibBinaryWriter:
             output_dir: Output directory
             start_date: Start date for instruments
             end_date: End date for instruments
+            incremental: If True, merge with existing instruments
 
         Returns:
             List of symbols
@@ -187,22 +188,50 @@ class QlibBinaryWriter:
                 ORDER BY {symbol_col}
             """).fetch_df()
 
-            symbols = symbols_df[symbol_col].tolist()
+            new_symbols = symbols_df[symbol_col].tolist()
 
             # Filter out any remaining null/NaN values
-            symbols = [s for s in symbols if s and str(s).lower() != 'nan']
+            new_symbols = [s for s in new_symbols if s and str(s).lower() != 'nan']
 
-            # Write instruments file in Qlib format (tab-separated: SYMBOL\tSTART\tEND)
+            # Read existing instruments if incremental mode
             instruments_dir = output_dir / 'instruments'
             instruments_dir.mkdir(parents=True, exist_ok=True)
+            instruments_file = instruments_dir / 'all.txt'
 
-            with open(instruments_dir / 'all.txt', 'w') as f:
-                for symbol in symbols:
-                    f.write(f"{symbol}\t{start_date}\t{end_date}\n")
+            existing_instruments = {}
+            if incremental and instruments_file.exists():
+                with open(instruments_file, 'r') as f:
+                    for line in f:
+                        line = line.strip()
+                        if line:
+                            parts = line.split('\t')
+                            if len(parts) >= 3:
+                                symbol, sym_start, sym_end = parts[0], parts[1], parts[2]
+                                existing_instruments[symbol] = (sym_start, sym_end)
 
-            logger.debug(f"Generated instruments file with {len(symbols)} symbols")
+            # Merge new symbols with existing
+            all_symbols = set(new_symbols) | set(existing_instruments.keys())
 
-            return symbols
+            # Write instruments file in Qlib format (tab-separated: SYMBOL\tSTART\tEND)
+            with open(instruments_file, 'w') as f:
+                for symbol in sorted(all_symbols):
+                    if symbol in existing_instruments:
+                        # Use existing date range (extended if needed)
+                        sym_start, sym_end = existing_instruments[symbol]
+                        # Extend end date if new data is later
+                        if end_date > sym_end:
+                            sym_end = end_date
+                        # Extend start date if new data is earlier
+                        if start_date < sym_start:
+                            sym_start = start_date
+                        f.write(f"{symbol}\t{sym_start}\t{sym_end}\n")
+                    else:
+                        # New symbol
+                        f.write(f"{symbol}\t{start_date}\t{end_date}\n")
+
+            logger.debug(f"Generated instruments file with {len(all_symbols)} symbols (incremental: {incremental})")
+
+            return sorted(all_symbols)
 
         except Exception as e:
             raise QlibBinaryWriterError(f"Failed to generate instruments: {e}")
@@ -212,7 +241,8 @@ class QlibBinaryWriter:
         data_type: str,
         start_date: str,
         end_date: str,
-        output_dir: Path
+        output_dir: Path,
+        incremental: bool = True
     ) -> List[str]:
         """
         Generate calendars/day.txt
@@ -222,6 +252,7 @@ class QlibBinaryWriter:
             start_date: Start date
             end_date: End date
             output_dir: Output directory
+            incremental: If True, merge with existing calendar
 
         Returns:
             List of trading days
@@ -241,19 +272,32 @@ class QlibBinaryWriter:
                 ORDER BY date
             """).fetch_df()
 
-            trading_days = dates_df['date'].astype(str).tolist()
+            new_trading_days = set(dates_df['date'].astype(str).tolist())
 
-            # Write calendar file
+            # Read existing calendar if incremental mode
             calendars_dir = output_dir / 'calendars'
             calendars_dir.mkdir(parents=True, exist_ok=True)
+            calendar_file = calendars_dir / 'day.txt'
 
-            with open(calendars_dir / 'day.txt', 'w') as f:
-                for date in trading_days:
+            existing_days = set()
+            if incremental and calendar_file.exists():
+                with open(calendar_file, 'r') as f:
+                    for line in f:
+                        line = line.strip()
+                        if line:
+                            existing_days.add(line)
+
+            # Merge new days with existing
+            all_trading_days = sorted(new_trading_days | existing_days)
+
+            # Write calendar file
+            with open(calendar_file, 'w') as f:
+                for date in all_trading_days:
                     f.write(f"{date}\n")
 
-            logger.debug(f"Generated calendar file with {len(trading_days)} trading days")
+            logger.debug(f"Generated calendar file with {len(all_trading_days)} trading days (incremental: {incremental})")
 
-            return trading_days
+            return all_trading_days
 
         except Exception as e:
             raise QlibBinaryWriterError(f"Failed to generate calendar: {e}")

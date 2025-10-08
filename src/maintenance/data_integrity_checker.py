@@ -73,7 +73,7 @@ class DataIntegrityChecker:
         )
 
         self.qlib_root = qlib_root or (
-            self.config.get_data_root() / 'binary'
+            self.config.get_data_root() / 'qlib'
         )
 
         # DuckDB for parquet queries
@@ -81,6 +81,10 @@ class DataIntegrityChecker:
 
         # Data types to check
         self.data_types = ['stocks_daily', 'stocks_minute', 'options_daily']
+
+        # Data types that should have qlib binary format checked
+        # (only stocks_daily is converted to qlib binary format)
+        self.qlib_data_types = ['stocks_daily']
 
         # Market calendar for validating trading days
         self.market_calendar = get_default_calendar()
@@ -225,9 +229,13 @@ class DataIntegrityChecker:
         parquet_dates = self._get_parquet_dates(data_type)
         logger.info(f"  Parquet: {len(parquet_dates)} dates found")
 
-        # Get dates from qlib
-        qlib_dates = self._get_qlib_dates(data_type)
-        logger.info(f"  Qlib:    {len(qlib_dates)} dates found")
+        # Get dates from qlib (only for data types that use qlib binary format)
+        check_qlib = data_type in self.qlib_data_types
+        qlib_dates = self._get_qlib_dates(data_type) if check_qlib else set()
+        if check_qlib:
+            logger.info(f"  Qlib:    {len(qlib_dates)} dates found")
+        else:
+            logger.info(f"  Qlib:    Skipped (not converted to qlib binary format)")
 
         # Find date ranges
         parquet_range = (
@@ -283,24 +291,26 @@ class DataIntegrityChecker:
         else:
             logger.info(f"  ✅ No gaps in parquet data")
 
-        if qlib_gaps:
-            logger.warning(f"  ⚠️  Found {len(qlib_gaps)} gaps in qlib data:")
-            for start, end in qlib_gaps:
-                logger.warning(f"      {start} to {end}")
-        else:
-            logger.info(f"  ✅ No gaps in qlib data")
-
-        if missing_in_qlib:
-            logger.warning(f"  ⚠️  {len(missing_in_qlib)} dates in parquet but not in qlib (need conversion)")
-            if len(missing_in_qlib) <= 10:
-                logger.warning(f"      {', '.join(sorted(missing_in_qlib))}")
+        # Only report qlib-related issues for data types that are checked
+        if check_qlib:
+            if qlib_gaps:
+                logger.warning(f"  ⚠️  Found {len(qlib_gaps)} gaps in qlib data:")
+                for start, end in qlib_gaps:
+                    logger.warning(f"      {start} to {end}")
             else:
-                logger.warning(f"      {', '.join(sorted(list(missing_in_qlib))[:5])} ... (showing first 5)")
+                logger.info(f"  ✅ No gaps in qlib data")
 
-        if missing_in_parquet:
-            logger.warning(f"  ⚠️  {len(missing_in_parquet)} dates in qlib but not in parquet (data loss?)")
-            if len(missing_in_parquet) <= 10:
-                logger.warning(f"      {', '.join(sorted(missing_in_parquet))}")
+            if missing_in_qlib:
+                logger.warning(f"  ⚠️  {len(missing_in_qlib)} dates in parquet but not in qlib (need conversion)")
+                if len(missing_in_qlib) <= 10:
+                    logger.warning(f"      {', '.join(sorted(missing_in_qlib))}")
+                else:
+                    logger.warning(f"      {', '.join(sorted(list(missing_in_qlib))[:5])} ... (showing first 5)")
+
+            if missing_in_parquet:
+                logger.warning(f"  ⚠️  {len(missing_in_parquet)} dates in qlib but not in parquet (data loss?)")
+                if len(missing_in_parquet) <= 10:
+                    logger.warning(f"      {', '.join(sorted(missing_in_parquet))}")
 
         return result
 
@@ -344,6 +354,9 @@ class DataIntegrityChecker:
         logger.info("="*70)
 
         for data_type, result in results.items():
+            # Check if this data type should have qlib checked
+            check_qlib = data_type in self.qlib_data_types
+
             # Generate commands for parquet gaps
             parquet_gaps = result['parquet']['gaps']
             if parquet_gaps:
@@ -355,30 +368,31 @@ class DataIntegrityChecker:
                     commands.append(cmd)
                     logger.info(f"  {start} to {end}")
 
-            # Generate commands for dates in parquet but not in qlib
-            missing_in_qlib = result['missing_in_qlib']
-            if missing_in_qlib:
-                logger.info(f"\n{data_type} - Convert to qlib:")
-                # Group consecutive dates
-                date_ranges = self._group_consecutive_dates(missing_in_qlib)
-                for start, end in date_ranges:
-                    cmd = f"# Convert to qlib: {data_type} from {start} to {end}"
-                    commands.append(cmd)
-                    cmd = f"python -c \"from src.transform.qlib_binary_writer import QlibBinaryWriter; from src.core.config_loader import ConfigLoader; from pathlib import Path; writer = QlibBinaryWriter(enriched_root=Path('data/parquet'), qlib_root=Path('{self.qlib_root}'), config=ConfigLoader()); writer.convert_data_type('{data_type}', '{start}', '{end}', incremental=False)\""
-                    commands.append(cmd)
-                    logger.info(f"  {start} to {end}")
+            # Generate commands for dates in parquet but not in qlib (only for qlib data types)
+            if check_qlib:
+                missing_in_qlib = result['missing_in_qlib']
+                if missing_in_qlib:
+                    logger.info(f"\n{data_type} - Convert to qlib:")
+                    # Group consecutive dates
+                    date_ranges = self._group_consecutive_dates(missing_in_qlib)
+                    for start, end in date_ranges:
+                        cmd = f"# Convert to qlib: {data_type} from {start} to {end}"
+                        commands.append(cmd)
+                        cmd = f"python -c \"from src.transform.qlib_binary_writer import QlibBinaryWriter; from src.core.config_loader import ConfigLoader; from pathlib import Path; writer = QlibBinaryWriter(enriched_root=Path('data/parquet'), qlib_root=Path('{self.qlib_root}'), config=ConfigLoader()); writer.convert_data_type('{data_type}', '{start}', '{end}', incremental=False)\""
+                        commands.append(cmd)
+                        logger.info(f"  {start} to {end}")
 
-            # Generate commands for dates in qlib but not in parquet (potential data loss)
-            missing_in_parquet = result['missing_in_parquet']
-            if missing_in_parquet:
-                logger.warning(f"\n{data_type} - Missing in parquet (need to re-download):")
-                date_ranges = self._group_consecutive_dates(missing_in_parquet)
-                for start, end in date_ranges:
-                    cmd = f"# WARNING: Re-download missing parquet data: {data_type} from {start} to {end}"
-                    commands.append(cmd)
-                    cmd = f"python -c \"import asyncio; from src.orchestration.ingestion_orchestrator import IngestionOrchestrator; from src.core.config_loader import ConfigLoader; asyncio.run(IngestionOrchestrator(config=ConfigLoader()).ingest_date_range('{data_type}', '{start}', '{end}', use_polars=True, incremental=False))\""
-                    commands.append(cmd)
-                    logger.warning(f"  {start} to {end}")
+                # Generate commands for dates in qlib but not in parquet (potential data loss)
+                missing_in_parquet = result['missing_in_parquet']
+                if missing_in_parquet:
+                    logger.warning(f"\n{data_type} - Missing in parquet (need to re-download):")
+                    date_ranges = self._group_consecutive_dates(missing_in_parquet)
+                    for start, end in date_ranges:
+                        cmd = f"# WARNING: Re-download missing parquet data: {data_type} from {start} to {end}"
+                        commands.append(cmd)
+                        cmd = f"python -c \"import asyncio; from src.orchestration.ingestion_orchestrator import IngestionOrchestrator; from src.core.config_loader import ConfigLoader; asyncio.run(IngestionOrchestrator(config=ConfigLoader()).ingest_date_range('{data_type}', '{start}', '{end}', use_polars=True, incremental=False))\""
+                        commands.append(cmd)
+                        logger.warning(f"  {start} to {end}")
 
         # Write to file if requested
         if output_file:
@@ -463,6 +477,7 @@ class DataIntegrityChecker:
 
         for data_type, result in results.items():
             logger.info(f"\n{data_type}:")
+            check_qlib = data_type in self.qlib_data_types
 
             # Backfill parquet gaps
             if not qlib_only:
@@ -485,8 +500,8 @@ class DataIntegrityChecker:
                             logger.error(f"    ❌ Failed: {e}")
                             backfill_results[data_type][f'parquet_{start}_{end}'] = {'error': str(e)}
 
-            # Convert missing dates to qlib
-            if not parquet_only:
+            # Convert missing dates to qlib (only for qlib data types)
+            if not parquet_only and check_qlib:
                 missing_in_qlib = result['missing_in_qlib']
                 if missing_in_qlib:
                     date_ranges = self._group_consecutive_dates(missing_in_qlib)

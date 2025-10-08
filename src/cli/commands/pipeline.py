@@ -110,19 +110,19 @@ def run(data_type, start_date, end_date, skip_ingest, skip_enrich, skip_convert)
             if data_type == 'stocks_daily':
                 click.echo("🔄 Step 3/3: Converting to Qlib format...")
 
-                with QlibBinaryWriter(
+                writer = QlibBinaryWriter(
                     enriched_root=config.get_data_root() / 'enriched',
-                    qlib_root=config.get_data_root() / 'binary',
+                    qlib_root=config.get_data_root() / 'qlib',
                     config=config
-                ) as writer:
-                    result = writer.convert_data_type(
-                        data_type=data_type,
-                        start_date=start_date,
-                        end_date=end_date,
-                        incremental=True
-                    )
+                )
+                result = writer.convert_data_type(
+                    data_type=data_type,
+                    start_date=start_date,
+                    end_date=end_date,
+                    incremental=True
+                )
 
-                    click.echo(f"   ✅ Converted {result['symbols_converted']} symbols\n")
+                click.echo(f"   ✅ Converted {result['symbols_converted']} symbols\n")
             else:
                 click.echo("   ⏭️  Skipping conversion (only stocks_daily supports Qlib format)\n")
         else:
@@ -186,7 +186,7 @@ def daily(data_type, days):
         if data_type == 'stocks_daily':
             with QlibBinaryWriter(
                 enriched_root=config.get_data_root() / 'enriched',
-                qlib_root=config.get_data_root() / 'binary',
+                qlib_root=config.get_data_root() / 'qlib',
                 config=config
             ) as writer:
                 writer.convert_data_type(
