@@ -50,3 +50,8 @@ class BinaryConversionError(PipelineException):
 class WatermarkError(PipelineException):
     """Watermark management error"""
     pass
+
+
+class APIError(PipelineException):
+    """Polygon API request error"""
+    pass

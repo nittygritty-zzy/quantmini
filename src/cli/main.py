@@ -8,7 +8,7 @@ import logging
 import sys
 from pathlib import Path
 
-from .commands import data, pipeline, config_cmd, validate
+from .commands import data, pipeline, config_cmd, validate, schema, api
 
 
 # Configure logging to show INFO and above to stderr with simple format
@@ -37,6 +37,8 @@ cli.add_command(data.data)
 cli.add_command(pipeline.pipeline)
 cli.add_command(config_cmd.config)
 cli.add_command(validate.validate)
+cli.add_command(schema.schema)
+cli.add_command(api.api)
 
 
 if __name__ == '__main__':

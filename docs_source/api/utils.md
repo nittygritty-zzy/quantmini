@@ -85,7 +85,7 @@ from qlib.contrib.model.gbdt import LGBModel
 import pandas as pd
 
 # Initialize Qlib
-qlib.init(provider_uri='data/binary/stocks_daily', region='us')
+qlib.init(provider_uri='data/qlib/stocks_daily', region='us')
 
 # Create model
 model = LGBModel(

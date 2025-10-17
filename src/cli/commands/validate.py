@@ -22,7 +22,7 @@ def binary(data_type):
     """Validate Qlib binary format conversion."""
     
     config = ConfigLoader()
-    qlib_root = config.get_data_root() / 'binary' / data_type
+    qlib_root = config.get_data_root() / 'qlib' / data_type
     
     if not qlib_root.exists():
         click.echo(f"❌ Qlib binary directory not found: {qlib_root}", err=True)

@@ -1156,7 +1156,7 @@ class IncrementalProcessor:
                 if self._should_convert_to_binary():
                     converter = QlibBinaryWriter(
                         Path(f'data/lake/{self.data_type}'),
-                        Path(f'data/binary/{self.data_type}'),
+                        Path(f'data/qlib/{self.data_type}'),
                         mode=self.profile['recommended_mode']
                     )
                     converter.convert_all_symbols()

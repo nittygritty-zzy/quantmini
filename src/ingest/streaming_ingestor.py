@@ -154,7 +154,7 @@ class StreamingIngestor(BaseIngestor):
                         output_path,
                         schema=table.schema,
                         compression='snappy',
-                        use_dictionary=True,
+                        use_dictionary=False,  # Disable for schema consistency
                         write_statistics=True,
                     )
                     first_chunk = False

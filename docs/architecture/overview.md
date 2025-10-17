@@ -365,8 +365,8 @@ mkdir -p src/{core,download,ingest,storage,features,transform,query,orchestratio
 
 # Data directories (with .gitkeep to track empty dirs)
 mkdir -p data/{lake/stocks/{daily/{raw,enriched},minute/{raw,enriched}},lake/options/{daily/{raw,enriched},minute/{raw,enriched}}}
-mkdir -p data/binary/stocks/{daily/{features,instruments,calendars},minute/{features,instruments,calendars}}
-mkdir -p data/binary/options/{daily/{features,instruments,calendars},minute/{features,instruments,calendars}}
+mkdir -p data/qlib/stocks/{daily/{features,instruments,calendars},minute/{features,instruments,calendars}}
+mkdir -p data/qlib/options/{daily/{features,instruments,calendars},minute/{features,instruments,calendars}}
 mkdir -p data/{metadata/stocks,metadata/options,cache/{queries,aggregations},temp/chunks,archive/{expired_options,historical}}
 
 # Logs

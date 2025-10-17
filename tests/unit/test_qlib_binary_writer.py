@@ -95,8 +95,10 @@ def test_instruments_generation(writer, sample_data):
     """Test instruments file created correctly"""
     data_type = sample_data['data_type']
     output_dir = writer.qlib_root / data_type
+    start_date = sample_data['dates'][0]
+    end_date = sample_data['dates'][-1]
 
-    symbols = writer._generate_instruments(data_type, output_dir)
+    symbols = writer._generate_instruments(data_type, output_dir, start_date, end_date, incremental=False)
 
     # Check symbols list
     assert len(symbols) == len(sample_data['symbols'])
@@ -107,7 +109,7 @@ def test_instruments_generation(writer, sample_data):
     assert instruments_file.exists()
 
     with open(instruments_file) as f:
-        file_symbols = [line.strip() for line in f]
+        file_symbols = [line.strip().split('\t')[0] for line in f]
 
     assert file_symbols == sorted(sample_data['symbols'])
 

@@ -1,5 +1,7 @@
 qlib_init:
-    provider_uri: "/Volumes/sandisk/quantmini-data/data/qlib/stocks_daily"
+    # Update provider_uri to match your DATA_ROOT environment variable
+    # Default: ./data/qlib/stocks_daily
+    provider_uri: "./data/qlib/stocks_daily"
     region: us
 
 market: &market all

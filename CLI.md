@@ -153,9 +153,9 @@ quantmini data convert \
 ```
 
 Outputs Qlib-compatible binary format:
-- `data/binary/{data_type}/instruments/all.txt`
-- `data/binary/{data_type}/calendars/day.txt`
-- `data/binary/{data_type}/features/{symbol}/{feature}.bin`
+- `data/qlib/{data_type}/instruments/all.txt`
+- `data/qlib/{data_type}/calendars/day.txt`
+- `data/qlib/{data_type}/features/{symbol}/{feature}.bin`
 
 #### `quantmini data query`
 Query enriched data.
@@ -310,6 +310,114 @@ quantmini validate config
 # Check and fix
 quantmini validate config --fix
 ```
+
+---
+
+### Schema Management
+
+Schema validation and diagnostics commands for ensuring data consistency.
+
+#### `quantmini schema validate`
+Validate production schema consistency across all datasets.
+
+```bash
+# Validate all datasets with default data root
+quantmini schema validate
+
+# Validate with custom data root
+quantmini schema validate --data-root /Volumes/sandisk/quantmini-data
+```
+
+Checks:
+- Parquet datasets (stocks_daily, stocks_minute, options_daily, options_minute)
+- Enriched datasets
+- Qlib binary data
+
+Reports:
+- File counts
+- Schema consistency
+- Feature counts
+- Date ranges
+
+#### `quantmini schema diagnose`
+Diagnose schema inconsistencies for a specific data type.
+
+```bash
+# Diagnose stocks_daily (checks both parquet and enriched)
+quantmini schema diagnose --data-type stocks_daily
+
+# Diagnose only parquet
+quantmini schema diagnose --data-type stocks_daily --dataset parquet
+
+# Diagnose only enriched
+quantmini schema diagnose --data-type stocks_daily --dataset enriched
+
+# With custom data root
+quantmini schema diagnose --data-type stocks_daily --data-root /custom/path
+```
+
+Shows:
+- Number of different schemas detected
+- Example files for each schema
+- Column-by-column differences
+- Date ranges for each schema
+
+#### `quantmini schema fix`
+Fix schema inconsistencies by re-ingesting data with correct schema.
+
+```bash
+# Fix stocks_daily schema
+quantmini schema fix --data-type stocks_daily
+
+# Fix with custom date range
+quantmini schema fix \
+  --data-type stocks_daily \
+  --start-date 2020-01-01 \
+  --end-date 2025-12-31
+
+# Fix all data types
+quantmini schema fix --data-type all
+
+# Dry run (show what would be done without doing it)
+quantmini schema fix --data-type stocks_daily --dry-run
+
+# With custom data root
+quantmini schema fix --data-type stocks_daily --data-root /custom/path
+```
+
+**Options:**
+- `-t, --data-type`: Data type to fix (`stocks_daily`, `stocks_minute`, `options_daily`, `options_minute`, `all`)
+- `-s, --start-date`: Start date (default: 2020-10-16)
+- `-e, --end-date`: End date (default: today)
+- `--data-root`: Custom data root directory
+- `--dry-run`: Show what would be done without making changes
+
+#### `quantmini schema verify-qlib`
+Verify Qlib binary format compatibility and data integrity.
+
+```bash
+# Verify Qlib data
+quantmini schema verify-qlib
+
+# With custom data root
+quantmini schema verify-qlib --data-root /Volumes/sandisk/quantmini-data
+```
+
+Comprehensive verification includes:
+1. File structure check (instruments, calendars, features)
+2. Instruments count
+3. Calendar validation
+4. Feature file verification
+5. Qlib initialization test
+6. Data query test
+7. Comparison with enriched parquet
+
+Reports:
+- Number of instruments
+- Number of trading days
+- Number of binary files
+- Sample data queries
+- Data consistency verification
 
 ---
 

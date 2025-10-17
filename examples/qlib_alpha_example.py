@@ -138,7 +138,7 @@ def load_and_evaluate_alpha(expression: str, name: str):
     # Initialize Qlib
     print("\n[3.2] Initializing Qlib...")
     qlib.init(
-        provider_uri="/Volumes/sandisk/quantmini-data/data/qlib/stocks_daily",
+        provider_uri=os.getenv("DATA_ROOT", "./data") + "/qlib/stocks_daily",
         region="us"
     )
     print("✓ Qlib initialized")
@@ -210,7 +210,7 @@ def compare_multiple_alphas():
     # Initialize Qlib (if not already initialized)
     try:
         qlib.init(
-            provider_uri="/Volumes/sandisk/quantmini-data/data/qlib/stocks_daily",
+            provider_uri=os.getenv("DATA_ROOT", "./data") + "/qlib/stocks_daily",
             region="us"
         )
     except:

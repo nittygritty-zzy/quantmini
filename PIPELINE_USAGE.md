@@ -60,9 +60,11 @@ uv run quantmini pipeline run \
 
 ## What We Use
 
-- **Parquet files**: Stored in `/Volumes/sandisk/quantmini-data/data/data/parquet/`
-- **Enriched data**: Stored in `/Volumes/sandisk/quantmini-data/data/data/enriched/`
+- **Parquet files**: Stored in `$DATA_ROOT/parquet/`
+- **Enriched data**: Stored in `$DATA_ROOT/enriched/`
 - **No Qlib binaries**: We use `--skip-convert` to keep only Parquet format
+
+(Where `$DATA_ROOT` is configured via environment variable or `config/pipeline_config.yaml`)
 
 ## Benefits
 

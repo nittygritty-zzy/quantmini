@@ -1,8 +1,12 @@
 # Pipeline Configuration
 # This file contains all configurable settings for the data pipeline
+# This file IS COMMITTED to git - use relative paths or generic defaults
 
-# Data root directory (can be overridden by DATA_ROOT environment variable)
-data_root: /Volumes/sandisk/quantmini-data/data/data
+# Data root directory
+# Default: ./data (relative to project root)
+# For your personal path: Edit config/system_profile.yaml (gitignored)
+# Or set DATA_ROOT environment variable
+data_root: data
 
 pipeline:
   # Processing mode: adaptive, streaming, batch, or parallel
@@ -18,12 +22,22 @@ pipeline:
 
 # Data source settings
 source:
+  # S3 flat files source
   s3:
     endpoint: "https://files.polygon.io"
     bucket: "flatfiles"
     max_retries: 5
     retry_delay_seconds: 5
     timeout_seconds: 60
+
+  # Polygon REST API source
+  api:
+    enabled: true
+    base_url: "https://api.polygon.io"
+    max_retries: 3
+    timeout_seconds: 30
+    rate_limit_calls: 5  # Calls per second (free tier)
+    rate_limit_period: 1.0  # Seconds
 
 # Processing settings
 processing:
@@ -46,7 +60,9 @@ parquet:
   compression_level: 3
 
   # Advanced settings
-  use_dictionary: true
+  # IMPORTANT: use_dictionary must be False to ensure schema consistency
+  # across all ingestion runs (prevents dictionary<string> vs string type variations)
+  use_dictionary: false
   write_statistics: true
 
   # Row group sizes by mode (auto-adjusted based on system profile)

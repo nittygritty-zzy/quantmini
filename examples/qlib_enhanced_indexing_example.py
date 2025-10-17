@@ -95,7 +95,9 @@ def check_risk_model_availability():
     print("STEP 2: Checking Risk Model Data Availability")
     print("=" * 80)
 
-    risk_model_path = Path("/Volumes/sandisk/quantmini-data/data/riskmodel")
+    # Get data root from environment variable or use default
+    data_root = os.getenv('DATA_ROOT', './data')
+    risk_model_path = Path(data_root) / 'riskmodel'
 
     print(f"\n[2.1] Looking for risk model at: {risk_model_path}")
 
@@ -142,7 +144,7 @@ def train_model_and_predict():
     # Initialize Qlib
     print("\n[3.1] Initializing Qlib...")
     qlib.init(
-        provider_uri="/Volumes/sandisk/quantmini-data/data/qlib/stocks_daily",
+        provider_uri=os.getenv("DATA_ROOT", "./data") + "/qlib/stocks_daily",
         region="us"
     )
     print("✓ Qlib initialized")

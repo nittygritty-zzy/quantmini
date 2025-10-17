@@ -36,7 +36,7 @@ from pathlib import Path
 config = ConfigLoader()
 writer = QlibBinaryWriter(
     enriched_root=Path('data/enriched'),
-    qlib_root=Path('data/binary'),
+    qlib_root=Path('data/qlib'),
     config=config
 )
 
@@ -121,7 +121,7 @@ Run all validation checks.
 from src.transform import QlibBinaryValidator
 from pathlib import Path
 
-validator = QlibBinaryValidator(Path('data/binary'))
+validator = QlibBinaryValidator(Path('data/qlib'))
 results = validator.validate_conversion('stocks_daily')
 
 if results['all_passed']:
@@ -191,7 +191,7 @@ from qlib.data import D
 
 # Initialize Qlib
 qlib.init(
-    provider_uri='data/binary/stocks_daily',
+    provider_uri='data/qlib/stocks_daily',
     region='us'
 )
 
@@ -257,7 +257,7 @@ writer.convert_data_type(
 
 **Solution**: Check binary format structure:
 ```bash
-ls data/binary/stocks_daily/
+ls data/qlib/stocks_daily/
 # Should see: instruments/, calendars/, features/
 ```
 
@@ -265,7 +265,7 @@ ls data/binary/stocks_daily/
 
 **Solution**: Check tab-separated format:
 ```bash
-head data/binary/stocks_daily/instruments/all.txt
+head data/qlib/stocks_daily/instruments/all.txt
 # Format: SYMBOL\tSTART_DATE\tEND_DATE
 ```
 
@@ -276,12 +276,12 @@ head data/binary/stocks_daily/instruments/all.txt
 import struct
 
 # Read first 4 bytes (count)
-with open('data/binary/stocks_daily/features/AAPL/close.bin', 'rb') as f:
+with open('data/qlib/stocks_daily/features/AAPL/close.bin', 'rb') as f:
     count = struct.unpack('<I', f.read(4))[0]
     print(f"Binary has {count} values")
 
 # Compare with calendar
-with open('data/binary/stocks_daily/calendars/day.txt') as f:
+with open('data/qlib/stocks_daily/calendars/day.txt') as f:
     calendar_days = len(f.readlines())
     print(f"Calendar has {calendar_days} days")
 ```

@@ -38,7 +38,7 @@ def simple_model_example():
     # Step 1: Initialize Qlib
     print("\n[Step 1] Initializing Qlib...")
     qlib.init(
-        provider_uri="/Volumes/sandisk/quantmini-data/data/qlib/stocks_daily",
+        provider_uri=os.getenv("DATA_ROOT", "./data") + "/qlib/stocks_daily",
         region="us"
     )
     print("✓ Qlib initialized")
@@ -155,7 +155,7 @@ def compare_models_example():
 
     # Initialize Qlib
     qlib.init(
-        provider_uri="/Volumes/sandisk/quantmini-data/data/qlib/stocks_daily",
+        provider_uri=os.getenv("DATA_ROOT", "./data") + "/qlib/stocks_daily",
         region="us"
     )
 

@@ -209,13 +209,14 @@ class FeatureEngineer:
         # Create view from Parquet files
         try:
             if is_minute:
-                # Minute data uses timestamp (BIGINT nanoseconds), need to extract date and filter
+                # Minute data uses timestamp - extract date for filtering
+                # timestamp is BIGINT (nanoseconds since epoch), convert to DATE
                 self.conn.execute(f"""
                     CREATE OR REPLACE VIEW raw_data AS
                     SELECT *,
-                           CAST(TO_TIMESTAMP(timestamp / 1000000000) AS DATE) as date
+                           CAST(to_timestamp(timestamp / 1000000000) AS DATE) as date
                     FROM read_parquet('{input_pattern}', union_by_name=true)
-                    WHERE CAST(TO_TIMESTAMP(timestamp / 1000000000) AS DATE) = '{date}'
+                    WHERE CAST(to_timestamp(timestamp / 1000000000) AS DATE) = '{date}'
                 """)
             else:
                 # Daily data has date column

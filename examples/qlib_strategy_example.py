@@ -45,7 +45,7 @@ def train_model_and_predict():
     # Initialize Qlib
     print("\n[1.1] Initializing Qlib...")
     qlib.init(
-        provider_uri="/Volumes/sandisk/quantmini-data/data/qlib/stocks_daily",
+        provider_uri=os.getenv("DATA_ROOT", "./data") + "/qlib/stocks_daily",
         region="us"
     )
     print("✓ Qlib initialized")

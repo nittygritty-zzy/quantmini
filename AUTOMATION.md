@@ -1,46 +1,69 @@
-# QuantMini Daily Automation
+# QuantMini Automation
 
-Automated daily data pipeline using macOS launchd.
+Automated data pipelines using macOS launchd.
 
-## Setup Complete ✅
+## Active Automations ✅
 
-The daily automation is already configured and running! It will execute **every day at 6:00 PM** (18:00).
+### Daily Data Updates
+**Schedule**: Every day at 6:00 PM (18:00)
+**Script**: `scripts/daily_update.sh`
+**Purpose**: Download and process daily market data
+
+### Weekly Delisted Stocks Updates
+**Schedule**: Every Sunday at 2:00 AM
+**Script**: `scripts/weekly_update.sh`
+**Purpose**: Download delisted stocks to fix survivorship bias
+**Documentation**: `docs/DELISTED_STOCKS.md`
 
 ## What It Does
 
+### Daily Automation
 The daily automation (`scripts/daily_update.sh`) will:
 1. Download latest market data for stocks_daily, stocks_minute, and options_daily
 2. Enrich the data with calculated features
 3. Convert stocks_daily to Qlib binary format (incremental)
 4. Log all output to dated log files in `logs/`
 
+### Weekly Automation
+The weekly automation (`scripts/weekly_update.sh`) will:
+1. Query Polygon API for stocks delisted in the last 90 days
+2. Download historical OHLCV data for newly delisted stocks
+3. Convert to Qlib binary format (incremental)
+4. Log all output to `logs/weekly_*.log`
+
+This fixes **survivorship bias** by ensuring delisted stocks are included in backtests.
+
 ## Management Commands
 
 ### Check Status
 ```bash
-# Check if the job is loaded
+# Check both automations
 launchctl list | grep quantmini
 
-# View recent logs
+# View recent daily logs
 tail -f logs/daily_$(date +%Y%m%d)*.log
+
+# View recent weekly logs
+tail -f logs/weekly_*.log
 ```
 
 ### Test Manually
 ```bash
-# Run the script manually to test
+# Daily update
 ./scripts/daily_update.sh
 
-# Or just run the pipeline directly
-source .venv/bin/activate
-python -m src.cli.main pipeline daily -t stocks_daily -d 1
+# Weekly update
+./scripts/weekly_update.sh
 ```
 
 ### Stop/Start/Restart
+
+**Daily automation**:
 ```bash
-# Stop (unload)
+# Stop
 launchctl unload ~/Library/LaunchAgents/com.quantmini.daily.plist
 
-# Start (load)
+# Start
 launchctl load ~/Library/LaunchAgents/com.quantmini.daily.plist
 
 # Restart
@@ -48,8 +71,22 @@ launchctl unload ~/Library/LaunchAgents/com.quantmini.daily.plist
 launchctl load ~/Library/LaunchAgents/com.quantmini.daily.plist
 ```
 
+**Weekly automation**:
+```bash
+# Stop
+launchctl unload ~/Library/LaunchAgents/com.quantmini.weekly.plist
+
+# Start
+launchctl load ~/Library/LaunchAgents/com.quantmini.weekly.plist
+
+# Restart
+launchctl unload ~/Library/LaunchAgents/com.quantmini.weekly.plist
+launchctl load ~/Library/LaunchAgents/com.quantmini.weekly.plist
+```
+
 ### Change Schedule
-Edit `~/Library/LaunchAgents/com.quantmini.daily.plist`:
+
+**Daily automation** - Edit `~/Library/LaunchAgents/com.quantmini.daily.plist`:
 ```xml
 <key>StartCalendarInterval</key>
 <dict>
@@ -60,10 +97,28 @@ Edit `~/Library/LaunchAgents/com.quantmini.daily.plist`:
 </dict>
 ```
 
-Then reload:
+**Weekly automation** - Edit `~/Library/LaunchAgents/com.quantmini.weekly.plist`:
+```xml
+<key>StartCalendarInterval</key>
+<dict>
+    <key>Weekday</key>
+    <integer>0</integer>   <!-- 0=Sunday, 1=Monday, ..., 6=Saturday -->
+    <key>Hour</key>
+    <integer>2</integer>   <!-- Change this (0-23) -->
+    <key>Minute</key>
+    <integer>0</integer>   <!-- Change this (0-59) -->
+</dict>
+```
+
+Then reload the modified agent:
 ```bash
+# For daily
 launchctl unload ~/Library/LaunchAgents/com.quantmini.daily.plist
 launchctl load ~/Library/LaunchAgents/com.quantmini.daily.plist
+
+# For weekly
+launchctl unload ~/Library/LaunchAgents/com.quantmini.weekly.plist
+launchctl load ~/Library/LaunchAgents/com.quantmini.weekly.plist
 ```
 
 ### Run Multiple Times Per Day
@@ -98,55 +153,102 @@ ls -lht logs/daily_*.log | head -10
 tail -f logs/daily_*.log
 ```
 
+## Setup
+
+### Daily Automation (Already Configured)
+The daily automation is already set up. See management commands above.
+
+### Weekly Automation (One-Time Setup)
+Run the setup script to install the weekly automation:
+```bash
+./scripts/setup_weekly_automation.sh
+```
+
+This will:
+1. Create `~/Library/LaunchAgents/com.quantmini.weekly.plist`
+2. Load the LaunchAgent
+3. Verify it's running
+
 ## Files
 
-- **Automation script**: `scripts/daily_update.sh`
-- **Launch agent**: `~/Library/LaunchAgents/com.quantmini.daily.plist`
+### Daily Automation
+- **Script**: `scripts/daily_update.sh`
+- **LaunchAgent**: `~/Library/LaunchAgents/com.quantmini.daily.plist`
 - **Logs**: `logs/daily_YYYYMMDD_HHMMSS.log`
 - **Stdout/stderr**: `logs/daily_stdout.log`, `logs/daily_stderr.log`
 
+### Weekly Automation
+- **Script**: `scripts/weekly_update.sh`
+- **LaunchAgent**: `~/Library/LaunchAgents/com.quantmini.weekly.plist`
+- **Setup script**: `scripts/setup_weekly_automation.sh`
+- **Logs**: `logs/weekly_YYYYMMDD_HHMMSS.log`
+- **Stdout/stderr**: `logs/weekly_stdout.log`, `logs/weekly_stderr.log`
+- **Downloaded data**: `data/parquet/`, `data/delisted_stocks.csv`
+
 ## Troubleshooting
 
-### Job not running?
+### Jobs not running?
 ```bash
-# Check if loaded
+# Check which jobs are loaded
 launchctl list | grep quantmini
 
 # Check system log for errors
 log show --predicate 'subsystem == "com.apple.launchd"' --last 1h | grep quantmini
 ```
 
-### Test the script manually
+### Test scripts manually
 ```bash
+# Test daily update
 ./scripts/daily_update.sh
+
+# Test weekly update
+./scripts/weekly_update.sh
 ```
 
 ### Check permissions
 ```bash
-# Make sure script is executable
+# Make sure scripts are executable
 chmod +x scripts/daily_update.sh
+chmod +x scripts/weekly_update.sh
 
-# Check file permissions
-ls -l ~/Library/LaunchAgents/com.quantmini.daily.plist
+# Check LaunchAgent permissions
+ls -l ~/Library/LaunchAgents/com.quantmini.*.plist
+```
+
+### Weekly automation not finding delisted stocks?
+```bash
+# Check POLYGON_API_KEY is set
+echo $POLYGON_API_KEY
+
+# Or check in the plist file
+grep POLYGON_API_KEY ~/Library/LaunchAgents/com.quantmini.weekly.plist
+
+# Test the download script directly
+python scripts/download_delisted_stocks.py --start-date 2024-01-01 --end-date $(date +%Y-%m-%d) --skip-download
 ```
 
 ### Disable temporarily
 ```bash
+# Daily automation
 launchctl unload ~/Library/LaunchAgents/com.quantmini.daily.plist
+
+# Weekly automation
+launchctl unload ~/Library/LaunchAgents/com.quantmini.weekly.plist
 ```
 
 ## Alternative: Cron (Simpler but Less Reliable)
 
-If you prefer cron:
+If you prefer cron over LaunchAgent:
 ```bash
 # Edit crontab
 crontab -e
 
-# Add this line (runs at 6 PM daily)
-0 18 * * * /Users/zheyuanzhao/workspace/quantmini/scripts/daily_update.sh
+# Add these lines
+0 18 * * * /Users/zheyuanzhao/workspace/quantmini/scripts/daily_update.sh    # Daily at 6 PM
+0 2 * * 0 /Users/zheyuanzhao/workspace/quantmini/scripts/weekly_update.sh    # Sunday at 2 AM
 ```
 
-**Note**: launchd is recommended on macOS as it's more reliable and handles sleep/wake better.
+**Note**: LaunchAgent is recommended on macOS as it's more reliable, handles sleep/wake better, and integrates with system logging.
 
 ## Log Retention
 

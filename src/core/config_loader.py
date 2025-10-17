@@ -99,17 +99,7 @@ class ConfigLoader:
         # Start with defaults
         config = self._deep_copy(self.DEFAULT_CONFIG)
 
-        # Load system profile
-        system_profile_path = self.config_dir / 'system_profile.yaml'
-        if system_profile_path.exists():
-            with open(system_profile_path) as f:
-                system_profile = yaml.safe_load(f)
-                config['system_profile'] = system_profile
-                logger.info(f"Loaded system profile from {system_profile_path}")
-        else:
-            logger.warning(f"System profile not found at {system_profile_path}")
-
-        # Load user config
+        # Load user config first (lowest priority)
         pipeline_config_path = self.config_dir / 'pipeline_config.yaml'
         if pipeline_config_path.exists():
             with open(pipeline_config_path) as f:
@@ -118,6 +108,20 @@ class ConfigLoader:
                 logger.info(f"Loaded pipeline config from {pipeline_config_path}")
         else:
             logger.warning(f"Pipeline config not found at {pipeline_config_path}")
+
+        # Load system profile (higher priority - overrides pipeline_config)
+        system_profile_path = self.config_dir / 'system_profile.yaml'
+        if system_profile_path.exists():
+            with open(system_profile_path) as f:
+                system_profile = yaml.safe_load(f)
+                config['system_profile'] = system_profile
+                # Override data_root from system_profile if present
+                if 'data_root' in system_profile:
+                    config['data_root'] = system_profile['data_root']
+                    logger.info(f"Using data_root from system_profile: {system_profile['data_root']}")
+                logger.info(f"Loaded system profile from {system_profile_path}")
+        else:
+            logger.warning(f"System profile not found at {system_profile_path}")
 
         # Load credentials
         credentials_path = self.config_dir / 'credentials.yaml'

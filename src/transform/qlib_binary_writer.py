@@ -147,7 +147,7 @@ class QlibBinaryWriter:
             self._cleanup_macos_metadata(output_dir)
 
             result = {
-                'symbols_converted': len(symbols),
+                'symbols_converted': stats['symbols_converted'],
                 'trading_days': len(trading_days),
                 **stats
             }
@@ -183,7 +183,7 @@ class QlibBinaryWriter:
 
             symbols_df = self.conn.execute(f"""
                 SELECT DISTINCT {symbol_col}
-                FROM read_parquet('{input_pattern}')
+                FROM read_parquet('{input_pattern}', union_by_name=true)
                 WHERE {symbol_col} IS NOT NULL
                 ORDER BY {symbol_col}
             """).fetch_df()
@@ -267,7 +267,7 @@ class QlibBinaryWriter:
 
             dates_df = self.conn.execute(f"""
                 SELECT DISTINCT {date_expr} as date
-                FROM read_parquet('{input_pattern}')
+                FROM read_parquet('{input_pattern}', union_by_name=true)
                 WHERE {date_expr} >= '{start_date}' AND {date_expr} <= '{end_date}'
                 ORDER BY date
             """).fetch_df()
@@ -426,15 +426,16 @@ class QlibBinaryWriter:
                     AVG(typical_price) as typical_price,
                     AVG(avg_trade_size) as avg_trade_size,
                     AVG(vwap_approx) as vwap_approx
-                FROM read_parquet('{input_pattern}')
+                FROM read_parquet('{input_pattern}', union_by_name=true)
                 WHERE {symbol_col} = '{symbol}'
                 GROUP BY {symbol_col}, CAST({time_col} AS DATE)
                 ORDER BY date
             """).fetch_df()
         else:
+            # Daily data doesn't have timestamp column, so no need to exclude it
             symbol_df = self.conn.execute(f"""
                 SELECT *
-                FROM read_parquet('{input_pattern}')
+                FROM read_parquet('{input_pattern}', union_by_name=true)
                 WHERE {symbol_col} = '{symbol}'
                 ORDER BY date
             """).fetch_df()
@@ -543,13 +544,20 @@ class QlibBinaryWriter:
         # Query one row to get columns
         input_pattern = self.enriched_root / data_type / '**/*.parquet'
 
-        sample_df = self.conn.execute(f"""
-            SELECT * FROM read_parquet('{input_pattern}')
-            LIMIT 1
-        """).fetch_df()
+        # Only exclude timestamp for minute data (daily data doesn't have timestamp column)
+        if 'minute' in data_type:
+            sample_df = self.conn.execute(f"""
+                SELECT * EXCLUDE (timestamp) FROM read_parquet('{input_pattern}', union_by_name=true)
+                LIMIT 1
+            """).fetch_df()
+        else:
+            sample_df = self.conn.execute(f"""
+                SELECT * FROM read_parquet('{input_pattern}', union_by_name=true)
+                LIMIT 1
+            """).fetch_df()
 
         # Exclude metadata columns
-        exclude = ['symbol', 'date', 'timestamp', 'year', 'month', 'ticker']
+        exclude = ['symbol', 'date', 'year', 'month', 'ticker']
         features = [col for col in sample_df.columns if col not in exclude]
 
         return features

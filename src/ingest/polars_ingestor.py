@@ -101,6 +101,9 @@ class PolarsIngestor(BaseIngestor):
                     'reason': 'output_exists'
                 }
 
+            # Define explicit schema for consistent data types
+            schema_overrides = self._get_schema_overrides()
+
             # Read CSV with Polars
             if self.streaming:
                 # Lazy/streaming mode
@@ -108,8 +111,9 @@ class PolarsIngestor(BaseIngestor):
                     data,
                     has_header=True,
                     null_values=['', 'NA', 'NULL', 'NaN'],
-                    try_parse_dates=True,
+                    try_parse_dates=False,  # We'll handle dates explicitly
                     low_memory=True,
+                    schema_overrides=schema_overrides,
                 )
             else:
                 # Eager mode (load all into memory)
@@ -117,7 +121,8 @@ class PolarsIngestor(BaseIngestor):
                     data,
                     has_header=True,
                     null_values=['', 'NA', 'NULL', 'NaN'],
-                    try_parse_dates=True,
+                    try_parse_dates=False,  # We'll handle dates explicitly
+                    schema_overrides=schema_overrides,
                 )
 
             # Normalize column names (Polars)
@@ -136,13 +141,13 @@ class PolarsIngestor(BaseIngestor):
             # Convert to PyArrow
             table = df.to_arrow()
 
-            # Write Parquet
+            # Write Parquet with consistent schema (no dictionary encoding)
             output_path.parent.mkdir(parents=True, exist_ok=True)
             pq.write_table(
                 table,
                 output_path,
                 compression='snappy',
-                use_dictionary=True,
+                use_dictionary=False,  # Disable for schema consistency
                 write_statistics=True,
                 row_group_size=100000,
             )
@@ -247,17 +252,14 @@ class PolarsIngestor(BaseIngestor):
 
         # Add date column if not present
         if 'date' not in df.columns and 'timestamp' in df.columns:
-            # Handle both string and integer (Unix timestamp) formats
-            if df['timestamp'].dtype in [pl.Int64, pl.Int32, pl.UInt64, pl.UInt32]:
-                # Unix timestamp in nanoseconds - convert directly to datetime then to date
-                df = df.with_columns(
-                    pl.col('timestamp').cast(pl.Datetime('ns', time_zone='UTC')).cast(pl.Date).alias('date')
-                )
-            else:
-                # String timestamp
-                df = df.with_columns(
-                    pl.col('timestamp').str.to_date().alias('date')
-                )
+            # Timestamp is int64 (Unix nanoseconds from Polygon)
+            # Convert to date for partitioning
+            df = df.with_columns(
+                pl.col('timestamp')
+                .cast(pl.Datetime('ns', time_zone='UTC'))
+                .dt.date()
+                .alias('date')
+            )
         elif 'date' not in df.columns:
             from datetime import datetime
             dt = datetime.strptime(date, '%Y-%m-%d').date()
@@ -292,6 +294,36 @@ class PolarsIngestor(BaseIngestor):
 
         return df
 
+    def _get_schema_overrides(self) -> dict:
+        """
+        Get explicit schema overrides for consistent data types across all ingestions
+
+        This ensures all parquet files have identical schemas regardless of when
+        they were ingested, preventing type inference variations.
+
+        Returns:
+            Dictionary mapping column names to Polars dtypes
+        """
+        # Base schema for Polygon CSV files
+        # ticker, volume, open, close, high, low, window_start, transactions
+        schema = {
+            'ticker': pl.Utf8,  # Symbol - always string
+            'volume': pl.UInt64,  # Volume - unsigned 64-bit
+            'open': pl.Float32,  # Price - 32-bit float
+            'close': pl.Float32,  # Price - 32-bit float
+            'high': pl.Float32,  # Price - 32-bit float
+            'low': pl.Float32,  # Price - 32-bit float
+            'window_start': pl.Int64,  # Unix timestamp in nanoseconds
+            'transactions': pl.UInt32,  # Transaction count - unsigned 32-bit
+        }
+
+        # Add data-type specific columns
+        if 'minute' in self.data_type:
+            # Minute data may have additional columns
+            schema['vwap'] = pl.Float32
+
+        return schema
+
     def _optimize_dtypes_polars(self, df: pl.DataFrame) -> pl.DataFrame:
         """
         Optimize Polars DataFrame dtypes
@@ -302,14 +334,20 @@ class PolarsIngestor(BaseIngestor):
         Returns:
             Optimized DataFrame
         """
-        # Polars already uses optimal dtypes by default
-        # Just ensure float64 → float32 for price columns
+        # Ensure consistent types as specified in schema
+        # Most types are already set by schema_overrides, but double-check
 
         float_columns = ['open', 'high', 'low', 'close', 'vwap']
-
         for col in float_columns:
             if col in df.columns and df[col].dtype == pl.Float64:
                 df = df.with_columns(pl.col(col).cast(pl.Float32))
+
+        # Ensure volume and transactions are unsigned
+        if 'volume' in df.columns and df['volume'].dtype not in [pl.UInt64, pl.UInt32]:
+            df = df.with_columns(pl.col('volume').cast(pl.UInt64))
+
+        if 'transactions' in df.columns and df['transactions'].dtype not in [pl.UInt32, pl.UInt16]:
+            df = df.with_columns(pl.col('transactions').cast(pl.UInt32))
 
         return df
 

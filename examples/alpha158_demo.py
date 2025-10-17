@@ -242,7 +242,10 @@ def main():
     print("="*70)
 
     # Initialize Qlib
-    qlib_path = Path("/Volumes/sandisk/quantmini-data/data/data/qlib/stocks_daily")
+    # Update this path to match your DATA_ROOT configuration
+    import os
+    data_root = os.getenv('DATA_ROOT', './data')
+    qlib_path = Path(data_root) / 'qlib' / 'stocks_daily'
 
     if not qlib_path.exists():
         print(f"\n❌ Qlib data not found at {qlib_path}")

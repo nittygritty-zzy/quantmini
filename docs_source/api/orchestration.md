@@ -312,7 +312,7 @@ async def full_pipeline():
     # 3. Convert to Qlib binary
     writer = QlibBinaryWriter(
         enriched_root=Path('data/enriched'),
-        qlib_root=Path('data/binary'),
+        qlib_root=Path('data/qlib'),
         config=config
     )
     convert_result = writer.convert_data_type(
