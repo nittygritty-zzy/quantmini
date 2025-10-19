@@ -10,7 +10,7 @@ Downloads:
 - Sentiment insights
 - Keywords and related tickers
 
-Partition structure: news/year=YYYY/month=MM/day=DD/ticker=SYMBOL.parquet
+Partition structure: year=YYYY/month=MM/day=DD/ticker=SYMBOL.parquet
 """
 
 import polars as pl
@@ -62,7 +62,7 @@ class NewsDownloader:
         """
         Save DataFrame in date-first partitioned structure.
 
-        Structure: output_dir/news/year=YYYY/month=MM/ticker=SYMBOL.parquet
+        Structure: output_dir/year=YYYY/month=MM/day=DD/ticker=SYMBOL.parquet
 
         News articles can have multiple tickers, so we create a separate row for each ticker.
 
@@ -143,8 +143,8 @@ class NewsDownloader:
                 (pl.col('ticker') == ticker_name)
             ).drop(['year', 'month', 'day'])
 
-            # Create partition directory: news/year=2024/month=10/day=18/ticker=AAPL.parquet
-            partition_dir = self.output_dir / 'news' / f'year={year}' / f'month={month:02d}' / f'day={day:02d}'
+            # Create partition directory: year=2024/month=10/day=18/ticker=AAPL.parquet
+            partition_dir = self.output_dir / f'year={year}' / f'month={month:02d}' / f'day={day:02d}'
             partition_dir.mkdir(parents=True, exist_ok=True)
 
             output_file = partition_dir / f'ticker={ticker_name}.parquet'
