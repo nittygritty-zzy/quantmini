@@ -86,12 +86,9 @@ class IngestionOrchestrator:
         )
 
         # Parquet and metadata managers
-        self.parquet_root = parquet_root or (
-            self.config.get_data_root() / 'parquet'
-        )
-        self.metadata_root = metadata_root or (
-            self.config.get_data_root() / 'metadata'
-        )
+        # Use new Medallion Architecture paths (bronze layer for validated Parquet)
+        self.parquet_root = parquet_root or self.config.get_bronze_path()
+        self.metadata_root = metadata_root or self.config.get_metadata_path()
 
         self.metadata_manager = MetadataManager(self.metadata_root)
 

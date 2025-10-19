@@ -5,10 +5,10 @@
 # Optional: Override data root path
 # If not set, uses data_root from pipeline_config.yaml or DATA_ROOT env var
 # Examples:
-#   macOS external drive: /Volumes/ExternalDrive/quantmini-data/data
-#   Linux mount: /mnt/storage/quantmini-data/data
+#   macOS external drive: /Volumes/sandisk/quantmini-data/ticker_lookup
+#   Linux mount: /mnt/storage/quantmini-data/ticker_lookup
 #   Local: ./data
-data_root: ./data
+data_root: /Volumes/sandisk/quantmini-data/ticker_lookup
 
 # Hardware detection (auto-populated by profiler)
 hardware:

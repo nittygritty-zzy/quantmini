@@ -42,27 +42,37 @@ uv run quantmini pipeline run \
   --skip-convert
 ```
 
-## Pipeline Stages
+## Pipeline Stages (Medallion Architecture)
 
-1. **Ingest** (Download CSV → Parquet)
-   - Downloads from Polygon.io S3
-   - Converts to optimized Parquet format
+The pipeline follows the **Medallion Architecture** pattern with three data quality layers:
+
+1. **Ingest** (Landing → Bronze Layer)
+   - Downloads from Polygon.io S3 to landing layer
+   - Converts to validated Parquet format (bronze layer)
    - Validates schema and data types
+   - **Output**: `$DATA_ROOT/bronze/{data_type}/`
 
-2. **Enrich** (Add Alpha158 Features)
+2. **Enrich** (Bronze → Silver Layer)
+   - Reads validated Parquet from bronze layer
    - Computes technical indicators
-   - Adds alpha factors
-   - Uses DuckDB for efficient computation
+   - Adds alpha factors using DuckDB
+   - **Output**: `$DATA_ROOT/silver/{data_type}/`
 
-3. **Convert** (Optional: Qlib Binary)
-   - Converts to Qlib binary format
-   - We skip this by using `--skip-convert`
+3. **Convert** (Silver → Gold Layer)
+   - Converts enriched silver data to Qlib binary format
+   - Creates ML-ready datasets in gold layer
+   - **Output**: `$DATA_ROOT/gold/qlib/{data_type}/`
 
-## What We Use
+## Medallion Architecture Layers
 
-- **Parquet files**: Stored in `$DATA_ROOT/parquet/`
-- **Enriched data**: Stored in `$DATA_ROOT/enriched/`
-- **No Qlib binaries**: We use `--skip-convert` to keep only Parquet format
+- **Landing**: Raw CSV.GZ files organized by source (`landing/polygon-s3/`)
+- **Bronze**: Validated Parquet files with schema enforcement (`bronze/`)
+- **Silver**: Feature-enriched Parquet with calculated indicators (`silver/`)
+- **Gold**: ML-ready binary format optimized for backtesting (`gold/qlib/`)
+
+**Data Access Limitations:**
+- Stocks: 5-year access (2020-10-18 to present)
+- Options: 2-year access (2023-10-18 to present)
 
 (Where `$DATA_ROOT` is configured via environment variable or `config/pipeline_config.yaml`)
 

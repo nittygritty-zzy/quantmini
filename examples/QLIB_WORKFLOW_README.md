@@ -25,11 +25,11 @@ When converting data to Qlib format using `QlibBinaryWriter`, the following issu
 
 **Problem**: Qlib requires a `.qlib/dataset_info.json` file specifying the data frequency.
 
-**Solution**: Create this file in the Qlib data directory:
+**Solution**: Create this file in the Qlib data directory (gold layer):
 
 ```bash
-mkdir -p /path/to/qlib/stocks_daily/.qlib
-cat > /path/to/qlib/stocks_daily/.qlib/dataset_info.json << 'EOF'
+mkdir -p /path/to/gold/qlib/stocks_daily/.qlib
+cat > /path/to/gold/qlib/stocks_daily/.qlib/dataset_info.json << 'EOF'
 {
   "freq": ["day"]
 }
@@ -119,19 +119,19 @@ Before running, verify:
 
 ```bash
 # 1. Check frequency metadata exists
-cat /Volumes/sandisk/quantmini-data/data/qlib/stocks_daily/.qlib/dataset_info.json
+cat /Volumes/sandisk/quantmini-lake/gold/qlib/stocks_daily/.qlib/dataset_info.json
 # Should show: {"freq": ["day"]}
 
 # 2. Check instruments file format (should be TAB-separated)
-head -5 /Volumes/sandisk/quantmini-data/data/qlib/stocks_daily/instruments/all.txt
+head -5 /Volumes/sandisk/quantmini-lake/gold/qlib/stocks_daily/instruments/all.txt
 # Should show: SYMBOL<TAB>START_DATE<TAB>END_DATE
 
 # 3. Check for null symbols
-grep -i "nan" /Volumes/sandisk/quantmini-data/data/qlib/stocks_daily/instruments/all.txt
+grep -i "nan" /Volumes/sandisk/quantmini-lake/gold/qlib/stocks_daily/instruments/all.txt
 # Should return nothing
 
 # 4. Clean macOS metadata files
-find /Volumes/sandisk/quantmini-data/data/qlib/stocks_daily -name "._*" -delete
+find /Volumes/sandisk/quantmini-lake/gold/qlib/stocks_daily -name "._*" -delete
 ```
 
 ### 2. Run the Workflow
@@ -148,7 +148,7 @@ QLIB WORKFLOW EXAMPLE - US Stocks
 ================================================================================
 
 Configuration loaded from: examples/qlib_workflow_config.yaml
-Data source: /Volumes/sandisk/quantmini-data/data/qlib/stocks_daily
+Data source: /Volumes/sandisk/quantmini-lake/gold/qlib/stocks_daily
 Date range: 2025-08-01 to 2025-09-29
 Market: all
 
@@ -224,11 +224,11 @@ STEP 6: Recording Predictions
 
 **Solution**:
 ```bash
-# Create frequency metadata
-echo '{"freq": ["day"]}' > /path/to/.qlib/dataset_info.json
+# Create frequency metadata in gold layer
+echo '{"freq": ["day"]}' > /path/to/gold/qlib/stocks_daily/.qlib/dataset_info.json
 
 # Remove macOS metadata
-find /path/to/qlib/stocks_daily -name "._*" -delete
+find /path/to/gold/qlib/stocks_daily -name "._*" -delete
 ```
 
 ### Error: "'float' object has no attribute 'lower'"

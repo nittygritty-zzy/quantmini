@@ -512,7 +512,7 @@ def check_benchmark_exists(benchmark_symbol, data_path, start_date, end_date):
 if __name__ == "__main__":
     # 检查常见基准
     benchmarks = ["SPY", "QQQ", "DIA", "IWM"]
-    data_path = "/Volumes/sandisk/quantmini-data/data/qlib/stocks_daily"
+    data_path = "/Volumes/sandisk/quantmini-lake/data/qlib/stocks_daily"
 
     print("检查基准数据...")
     print("=" * 60)
@@ -579,7 +579,7 @@ def find_available_benchmark(data_path, start_date, end_date, preferred_order=No
 # 使用示例
 if __name__ == "__main__":
     benchmark = find_available_benchmark(
-        data_path="/Volumes/sandisk/quantmini-data/data/qlib/stocks_daily",
+        data_path="/Volumes/sandisk/quantmini-lake/data/qlib/stocks_daily",
         start_date="2025-08-01",
         end_date="2025-09-29"
     )
@@ -654,7 +654,7 @@ portfolio_metric, indicator_metric = backtest_with_smart_benchmark(
     strategy=strategy,
     start_time="2025-09-09",
     end_time="2025-09-29",
-    data_path="/Volumes/sandisk/quantmini-data/data/qlib/stocks_daily",
+    data_path="/Volumes/sandisk/quantmini-lake/data/qlib/stocks_daily",
     account=100000000,
     exchange_kwargs={...}
 )

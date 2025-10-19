@@ -115,28 +115,36 @@ source:
 - Developer: 100 calls/second
 - Advanced: 1000 calls/second
 
-## Data Output
+## Data Output (Medallion Architecture)
 
-API data is saved to separate directories from flat files:
+API data integrates with the Medallion Architecture:
 
 ```
 data/
-├── api/                    # API-fetched data (new)
-│   ├── stocks_daily/
-│   ├── stocks_minute/
-│   ├── options_daily/
-│   └── options_minute/
-├── raw/                    # S3 flat files
-├── parquet/                # Ingested data
-└── qlib/                   # Qlib binary format
+├── landing/               # Landing Layer
+│   └── polygon-api/      # API-fetched data (timestamped)
+│       ├── stocks_daily/
+│       ├── stocks_minute/
+│       ├── options_daily/
+│       └── options_minute/
+├── bronze/               # Bronze Layer (validated Parquet)
+├── silver/               # Silver Layer (feature-enriched)
+└── gold/                 # Gold Layer (ML-ready)
+    └── qlib/
 ```
+
+**API Data Flow:**
+1. Fetch from Polygon API → `landing/polygon-api/`
+2. Ingest to validated Parquet → `bronze/`
+3. Enrich with features → `silver/`
+4. Convert to Qlib binary → `gold/qlib/`
 
 Output files are timestamped:
 ```
-stocks_daily_2025-01-01_2025-01-31_20251017_143022.parquet
+landing/polygon-api/stocks_daily/stocks_daily_2025-01-01_2025-01-31_20251017_143022.parquet
 ```
 
-## API vs Flat Files
+## API vs S3 Flat Files
 
 | Feature | API (this module) | S3 Flat Files |
 |---------|------------------|---------------|
@@ -144,31 +152,42 @@ stocks_daily_2025-01-01_2025-01-31_20251017_143022.parquet
 | **Speed** | Slower (API rate limits) | Faster (parallel downloads) |
 | **Freshness** | Near real-time | T+1 (next day) |
 | **Cost** | API calls count | Bandwidth only |
+| **Landing Path** | `landing/polygon-api/` | `landing/polygon-s3/` |
 | **Best For** | Daily updates, live trading | Initial backfill, research |
 
-## Integration with Pipeline
+## Integration with Medallion Pipeline
 
-To integrate API data with your existing pipeline:
+API data integrates seamlessly with the Medallion Architecture:
 
-1. **Fetch fresh data:**
+1. **Fetch to Landing Layer:**
    ```bash
    quantmini api fetch-stocks-daily -t AAPL -s 2025-01-17
+   # Output: landing/polygon-api/stocks_daily/*.parquet
    ```
 
-2. **Copy to pipeline input:**
+2. **Ingest to Bronze Layer:**
    ```bash
-   cp data/api/stocks_daily/*.parquet data/parquet/stocks_daily/
+   quantmini data ingest -t stocks_daily -s 2025-01-17 -e 2025-01-17
+   # Validates and moves to: bronze/stocks_daily/
    ```
 
-3. **Run enrichment:**
+3. **Enrich to Silver Layer:**
    ```bash
    quantmini data enrich -t stocks_daily -s 2025-01-17 -e 2025-01-17
+   # Adds features, outputs to: silver/stocks_daily/
    ```
 
-4. **Convert to Qlib:**
+4. **Convert to Gold Layer:**
    ```bash
    quantmini data convert -t stocks_daily -s 2025-01-17 -e 2025-01-17
+   # ML-ready binary: gold/qlib/stocks_daily/
    ```
+
+**Or use the complete pipeline:**
+```bash
+quantmini pipeline run -t stocks_daily -s 2025-01-17 -e 2025-01-17
+# Automatically runs: Landing → Bronze → Silver → Gold
+```
 
 ## Module Classes
 

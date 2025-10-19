@@ -1,6 +1,6 @@
 # Contributing to QuantMini
 
-Thank you for your interest in contributing to QuantMini! This document provides guidelines for contributing.
+Thank you for your interest in contributing to QuantMini! This document provides guidelines for contributing to the high-performance Medallion Architecture data pipeline.
 
 ## Getting Started
 
@@ -10,9 +10,10 @@ Thank you for your interest in contributing to QuantMini! This document provides
    git clone https://github.com/YOUR_USERNAME/quantmini.git
    cd quantmini
    ```
-3. **Install development dependencies**:
+3. **Install with uv**:
    ```bash
-   pip install -e ".[dev]"
+   uv sync
+   source .venv/bin/activate
    ```
 
 ## Development Workflow
@@ -31,15 +32,16 @@ git checkout -b fix/your-bug-fix
 - Follow PEP 8 style guidelines
 - Add docstrings to functions and classes
 - Include type hints where appropriate
+- Keep Medallion Architecture principles in mind
 
 ### 3. Test Your Changes
 
 ```bash
-# Run tests
-pytest tests/
+# Run all tests
+pytest tests/ -v
 
-# Run specific test
-pytest tests/unit/test_your_module.py
+# Run specific test module
+pytest tests/unit/test_polygon_rest_client.py -v
 
 # Run with coverage
 pytest --cov=src tests/
@@ -73,25 +75,37 @@ Then create a Pull Request on GitHub.
 ### Python Style
 
 - Follow PEP 8
-- Use type hints
+- Use type hints (Python 3.10+ syntax)
 - Maximum line length: 100 characters
 - Use meaningful variable names
+- Prefer async/await for I/O operations
 
 ### Example
 
 ```python
-def calculate_alpha(prices: pd.DataFrame, window: int = 20) -> pd.Series:
+async def download_ticker_data(
+    ticker: str,
+    start_date: str,
+    end_date: str,
+    output_dir: Path
+) -> pl.DataFrame:
     """
-    Calculate alpha factor from price data.
+    Download ticker data from Polygon REST API.
 
     Args:
-        prices: DataFrame with price data
-        window: Rolling window size
+        ticker: Ticker symbol (e.g., 'AAPL')
+        start_date: Start date (YYYY-MM-DD)
+        end_date: End date (YYYY-MM-DD)
+        output_dir: Output directory for Parquet files
 
     Returns:
-        Series with alpha values
+        DataFrame with ticker data
+
+    Example:
+        >>> df = await download_ticker_data('AAPL', '2024-01-01', '2024-12-31', Path('bronze/'))
     """
-    return (prices - prices.rolling(window).mean()) / prices.rolling(window).std()
+    # Implementation here
+    pass
 ```
 
 ### Documentation
@@ -99,6 +113,7 @@ def calculate_alpha(prices: pd.DataFrame, window: int = 20) -> pd.Series:
 - Add docstrings to all public functions
 - Use Google-style docstrings
 - Include examples in docstrings when helpful
+- Update markdown docs when adding features
 
 ## Testing
 
@@ -108,24 +123,64 @@ def calculate_alpha(prices: pd.DataFrame, window: int = 20) -> pd.Series:
 - Mirror the source structure
 - Use descriptive test names
 - Test edge cases
+- Use pytest fixtures for common setup
 
 ### Example Test
 
 ```python
-def test_calculate_alpha():
-    """Test alpha calculation."""
-    prices = pd.DataFrame({'close': [100, 101, 102, 103]})
-    result = calculate_alpha(prices, window=2)
-    assert not result.isna().all()
+import pytest
+import polars as pl
+from src.download.polygon_rest_client import PolygonRESTClient
+
+@pytest.mark.asyncio
+async def test_polygon_rest_client_basic_request():
+    """Test basic REST API request."""
+    async with PolygonRESTClient(api_key="test_key") as client:
+        # Mock the request
+        response = await client.get("/v2/aggs/ticker/AAPL/range/1/day/2024-01-01/2024-01-31")
+        assert "results" in response
 ```
+
+## Architecture Guidelines
+
+### Medallion Architecture Layers
+
+When contributing, maintain the layer separation:
+
+1. **Landing Layer**: Raw source data only (no transformations)
+2. **Bronze Layer**: Validated Parquet with schema checks
+3. **Silver Layer**: Feature-enriched with technical indicators
+4. **Gold Layer**: ML-ready binary formats (Qlib)
+
+### Data Partitioning
+
+Use date-first partitioning for time-series data:
+
+```
+bronze/news/
+├── year=2024/
+│   ├── month=01/
+│   │   ├── ticker=AAPL.parquet
+│   │   └── ticker=MSFT.parquet
+│   └── month=02/
+└── year=2025/
+```
+
+### Async Best Practices
+
+- Use `async/await` for I/O operations
+- Implement proper error handling
+- Use context managers for resources
+- Batch requests when possible
 
 ## Documentation
 
 ### Adding Documentation
 
-1. Update relevant `.md` files in `docs_source/`
-2. Add examples when introducing new features
-3. Update API reference if adding new modules
+1. Update relevant `.md` files in `docs/`
+2. Update `docs_source/` for Sphinx documentation
+3. Add examples when introducing new features
+4. Update API reference if adding new modules
 
 ### Building Documentation Locally
 
@@ -141,11 +196,12 @@ View at `docs_source/_build/html/index.html`
 
 ### Before Submitting
 
-- [ ] Tests pass
+- [ ] Tests pass (`pytest tests/ -v`)
 - [ ] Documentation updated
 - [ ] Code follows style guidelines
 - [ ] Commit messages are clear
 - [ ] No unnecessary files included
+- [ ] Medallion Architecture preserved
 
 ### Pull Request Description
 
@@ -154,21 +210,28 @@ Include:
 - Why you made them
 - Any relevant issue numbers
 - Testing done
+- Performance impact (if applicable)
 
 ### Example PR Description
 
 ```markdown
 ## Description
-Add support for custom alpha expressions
+Add optimized batch downloader for ticker events
 
 ## Changes
-- Added AlphaExpression class
-- Updated documentation
-- Added unit tests
+- Created OptimizedTickerEventsDownloader class
+- Uses batch_request() for parallel API calls
+- Saves incrementally to avoid data loss
+- Added comprehensive tests
 
 ## Testing
 - All existing tests pass
-- Added 5 new tests for alpha expressions
+- Added 8 new tests for batch downloader
+- Tested with 11,464 tickers (2-5 minute completion)
+
+## Performance
+- 10x faster than individual requests
+- Reduced API calls by 80% through batching
 
 Fixes #123
 ```
@@ -179,11 +242,13 @@ Fixes #123
 
 Include:
 - Python version
-- QuantMini version
+- QuantMini version/commit
+- Operating system
 - Steps to reproduce
 - Expected behavior
 - Actual behavior
 - Error messages/stack traces
+- Data sample (if applicable)
 
 ### Feature Requests
 
@@ -191,20 +256,45 @@ Include:
 - Clear description of the feature
 - Use cases
 - Why it would be valuable
+- How it fits Medallion Architecture
 - Any implementation ideas
 
 ## Code Review Process
 
 1. Maintainers will review your PR
 2. Address any feedback
-3. Once approved, it will be merged
-4. Your contribution will be credited
+3. Tests must pass
+4. Once approved, it will be merged
+5. Your contribution will be credited
+
+## Project Structure
+
+When adding new code, follow the structure:
+
+```
+src/
+├── core/              # Core infrastructure
+├── download/          # Polygon REST API downloaders
+├── features/          # Feature engineering
+├── transform/         # Data transformations
+└── utils/             # Utilities and helpers
+
+scripts/
+├── download/          # Download scripts
+├── features/          # Feature generation scripts
+└── qlib/              # Qlib conversion scripts
+
+tests/
+├── unit/              # Unit tests
+└── integration/       # Integration tests
+```
 
 ## Questions?
 
 - Open an issue for questions
 - Check existing issues first
 - Be respectful and constructive
+- Reference relevant documentation
 
 ## License
 

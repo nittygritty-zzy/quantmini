@@ -1,39 +1,244 @@
 Examples
 ========
 
-Example scripts demonstrating QuantMini features.
+Example scripts demonstrating QuantMini's Medallion Architecture data pipeline.
 
 Overview
 --------
 
 All examples are available in the `examples/ directory <https://github.com/nittygritty-zzy/quantmini/tree/main/examples>`_ of the repository.
 
-Qlib Examples
--------------
-
-**Qlib Model Examples**
-
-* ``qlib_lgb_example.py`` - LightGBM model with Qlib
-* ``qlib_xgb_example.py`` - XGBoost model with Qlib
-* ``qlib_catboost_example.py`` - CatBoost model with Qlib
-
-**Custom Models**
-
-* ``qlib_custom_model_example.py`` - Custom model implementation
-
-**Trading Strategies**
-
-* ``qlib_topk_strategy_example.py`` - TopkDropout strategy
-* ``qlib_enhanced_indexing_example.py`` - Enhanced indexing strategy
-
-**Complete Workflow**
-
-* ``qlib_complete_workflow_example.py`` - End-to-end ML workflow
-
 Data Pipeline Examples
 ----------------------
 
-Coming soon: Examples for data ingestion, feature engineering, and querying.
+**Download Data**
+
+.. code-block:: bash
+
+   # Download stocks daily data (Bronze Layer)
+   source .venv/bin/activate
+   uv run python -m src.cli.main data ingest -t stocks_daily -s 2024-01-01 -e 2024-12-31
+
+   # Download news articles (8+ years available)
+   uv run python scripts/download/download_news_1year.py
+
+   # Download ticker events (optimized batch downloader)
+   uv run python scripts/download/download_ticker_events_optimized.py
+
+**Load and Query Data**
+
+.. code-block:: python
+
+   from src.utils.data_loader import DataLoader
+   import polars as pl
+
+   # Initialize loader
+   loader = DataLoader()
+
+   # Load stocks daily data
+   df = loader.load_stocks_daily(
+       symbols=['AAPL', 'MSFT', 'TSLA'],
+       start_date='2024-01-01',
+       end_date='2024-12-31',
+       columns=['date', 'close', 'volume']
+   )
+
+   # Filter by conditions
+   high_volume = df.filter(pl.col('volume') > 1_000_000)
+
+   # Convert to pandas if needed
+   df_pandas = df.to_pandas()
+
+**Generate Features** (Silver Layer)
+
+.. code-block:: bash
+
+   # Generate Alpha158 technical indicators
+   uv run python scripts/features/generate_alpha158.py
+
+**Convert to Qlib** (Gold Layer)
+
+.. code-block:: bash
+
+   # Convert to Qlib binary format for ML backtesting
+   uv run python scripts/qlib/convert_to_qlib.py
+
+Polygon REST API Examples
+--------------------------
+
+**News Downloader**
+
+.. code-block:: python
+
+   from src.download.polygon_rest_client import PolygonRESTClient
+   from src.download.news import NewsDownloader
+   from pathlib import Path
+
+   async def download_news():
+       async with PolygonRESTClient(api_key="YOUR_API_KEY") as client:
+           downloader = NewsDownloader(
+               client=client,
+               output_dir=Path("bronze/news"),
+               use_partitioned_structure=True
+           )
+
+           # Download news for AAPL
+           await downloader.download_news_batch(
+               tickers=['AAPL'],
+               published_utc_gte='2024-01-01',
+               published_utc_lte='2024-12-31',
+               limit=1000
+           )
+
+**Ticker Events Downloader**
+
+.. code-block:: python
+
+   from src.download.corporate_actions_optimized import OptimizedTickerEventsDownloader
+
+   async def download_events():
+       async with PolygonRESTClient(api_key="YOUR_API_KEY") as client:
+           downloader = OptimizedTickerEventsDownloader(
+               client=client,
+               output_dir=Path("bronze/corporate_actions"),
+               use_partitioned_structure=True
+           )
+
+           # Download ticker events (optimized batch processing)
+           await downloader.download_ticker_events_optimized(
+               tickers=['AAPL', 'MSFT', 'TSLA'],
+               chunk_size=1000,
+               save_interval=500
+           )
+
+Data Loader Examples
+--------------------
+
+**Load Stocks Daily**
+
+.. code-block:: python
+
+   from src.utils.data_loader import DataLoader
+   import polars as pl
+
+   loader = DataLoader()
+
+   # Basic load
+   df = loader.load_stocks_daily(
+       symbols=['AAPL'],
+       start_date='2024-01-01',
+       end_date='2024-12-31'
+   )
+
+   # With column selection
+   df = loader.load_stocks_daily(
+       symbols=['AAPL', 'MSFT'],
+       start_date='2024-01-01',
+       end_date='2024-12-31',
+       columns=['date', 'close', 'volume', 'vwap']
+   )
+
+   # Calculate returns
+   df = df.with_columns([
+       ((pl.col('close') - pl.col('close').shift(1)) / pl.col('close').shift(1))
+       .alias('return')
+   ])
+
+**Load News Data**
+
+.. code-block:: python
+
+   # Load news articles
+   news_df = loader.load_news(
+       tickers=['AAPL'],
+       start_date='2024-01-01',
+       end_date='2024-12-31'
+   )
+
+   # Filter by sentiment
+   positive_news = news_df.filter(
+       pl.col('sentiment_score') > 0.5
+   )
+
+**Load Fundamentals**
+
+.. code-block:: python
+
+   # Load fundamental data
+   fundamentals_df = loader.load_fundamentals(
+       tickers=['AAPL', 'MSFT'],
+       start_date='2020-01-01',
+       end_date='2024-12-31'
+   )
+
+Qlib Integration Examples
+--------------------------
+
+**Initialize Qlib**
+
+.. code-block:: python
+
+   import qlib
+   from qlib.data import D
+
+   # Initialize Qlib with binary data
+   qlib.init(
+       provider_uri='gold/qlib/stocks_daily',
+       region='us'
+   )
+
+   # Load data
+   instruments = D.instruments('all')
+   data = D.features(
+       instruments,
+       ['$close', '$volume', '$high', '$low'],
+       start_time='2024-01-01',
+       end_time='2024-12-31'
+   )
+
+**Backtest with Qlib**
+
+See the comprehensive Qlib examples in the repository for ML model training and backtesting.
+
+Complete Workflow Example
+--------------------------
+
+**End-to-End Data Pipeline**
+
+.. code-block:: python
+
+   """
+   Complete workflow: Download → Enrich → Convert → Backtest
+   """
+
+   # 1. Download data (Bronze Layer)
+   # Run: uv run python -m src.cli.main data ingest -t stocks_daily -s 2024-01-01 -e 2024-12-31
+
+   # 2. Generate features (Silver Layer)
+   # Run: uv run python scripts/features/generate_alpha158.py
+
+   # 3. Convert to Qlib (Gold Layer)
+   # Run: uv run python scripts/qlib/convert_to_qlib.py
+
+   # 4. Query and analyze
+   from src.utils.data_loader import DataLoader
+   import polars as pl
+
+   loader = DataLoader()
+   df = loader.load_stocks_daily(
+       symbols=['AAPL', 'MSFT'],
+       start_date='2024-01-01',
+       end_date='2024-12-31'
+   )
+
+   # Calculate statistics
+   stats = df.group_by('ticker').agg([
+       pl.col('close').mean().alias('avg_close'),
+       pl.col('volume').mean().alias('avg_volume'),
+       pl.col('close').std().alias('volatility')
+   ])
+
+   print(stats)
 
 Installation
 ------------
@@ -42,41 +247,48 @@ To run the examples:
 
 .. code-block:: bash
 
-   # Install QuantMini with ML dependencies
-   pip install quantmini[ml]
-
    # Clone the repository
    git clone https://github.com/nittygritty-zzy/quantmini.git
    cd quantmini
 
-   # Run an example
-   python examples/qlib_lgb_example.py
+   # Install with uv
+   uv sync
+
+   # Activate environment
+   source .venv/bin/activate
+
+   # Configure credentials
+   cp config/credentials.yaml.example config/credentials.yaml
+   # Edit config/credentials.yaml with your Polygon.io API key
 
 Running Examples
 ----------------
 
-All Qlib examples follow the same pattern:
+**Data Download Examples**
 
-1. Suppress gym warnings
-2. Initialize Qlib with binary data
-3. Load and prepare data
-4. Train model or run strategy
-5. Evaluate results
+.. code-block:: bash
 
-Example structure:
+   # Download stocks daily
+   uv run python -m src.cli.main data ingest -t stocks_daily -s 2024-01-01 -e 2024-12-31
 
-.. code-block:: python
+   # Download news (1 year)
+   uv run python scripts/download/download_news_1year.py
 
-   # Suppress gym warnings (IMPORTANT: before importing qlib)
-   from src.utils.suppress_gym_warnings import patch_gym
-   patch_gym()
+   # Download ticker events (optimized)
+   uv run python scripts/download/download_ticker_events_optimized.py
 
-   import qlib
-   from qlib.data import D
+**Data Query Examples**
 
-   # Initialize Qlib
-   qlib.init(provider_uri='data/binary/stocks_daily', region='us')
+.. code-block:: bash
 
-   # Your code here...
+   # Run data loader example
+   uv run python examples/data_loader_example.py
 
-See the `examples/ directory <https://github.com/nittygritty-zzy/quantmini/tree/main/examples>`_ for complete working examples.
+See the `examples/ directory <https://github.com/nittygritty-zzy/quantmini/tree/main/examples>`_ for more working examples.
+
+Additional Resources
+--------------------
+
+- **Documentation**: See ``docs/`` directory for comprehensive guides
+- **API Reference**: Full API documentation in ``docs_source/api/``
+- **Testing**: Run ``pytest tests/`` to see more usage examples

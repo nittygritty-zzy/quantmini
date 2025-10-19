@@ -76,15 +76,17 @@ class ConfigLoader:
         }
     }
 
-    def __init__(self, config_dir: Path = None):
+    def __init__(self, config_dir: Path = None, environment: str = None):
         """
         Initialize configuration loader
 
         Args:
             config_dir: Directory containing config files (default: config/)
+            environment: Environment to use ('production', 'test', or None for auto-detect)
         """
         self.config_dir = config_dir or Path('config')
         self.config_dir.mkdir(parents=True, exist_ok=True)
+        self.environment = environment
 
         self.config = self._load_config()
         self._validate_config()
@@ -99,12 +101,41 @@ class ConfigLoader:
         # Start with defaults
         config = self._deep_copy(self.DEFAULT_CONFIG)
 
-        # Load user config first (lowest priority)
+        # Load paths configuration FIRST (highest priority for paths)
+        paths_config_path = self.config_dir / 'paths.yaml'
+        if paths_config_path.exists():
+            with open(paths_config_path) as f:
+                paths_config = yaml.safe_load(f)
+
+                # Determine active environment
+                active_env = self.environment or paths_config.get('active_environment', 'production')
+
+                # Resolve environment aliases
+                env_aliases = paths_config.get('environments', {})
+                active_env = env_aliases.get(active_env, active_env)
+
+                # Get environment-specific paths
+                if active_env in paths_config:
+                    env_paths = paths_config[active_env]
+                    config.update(env_paths)
+                    logger.info(f"Loaded {active_env} environment paths from {paths_config_path}")
+                else:
+                    logger.warning(f"Environment '{active_env}' not found in paths.yaml")
+        else:
+            logger.warning(f"Paths config not found at {paths_config_path}")
+
+        # Load user config (lower priority than paths.yaml)
         pipeline_config_path = self.config_dir / 'pipeline_config.yaml'
         if pipeline_config_path.exists():
             with open(pipeline_config_path) as f:
                 user_config = yaml.safe_load(f)
-                config = self._merge_dicts(config, user_config)
+                # Merge but don't override paths from paths.yaml
+                for key, value in user_config.items():
+                    if key not in ['data_lake_root', 'bronze_path', 'silver_path', 'gold_path', 'metadata_path', 'logs_path']:
+                        if key in config and isinstance(config[key], dict) and isinstance(value, dict):
+                            config[key] = self._merge_dicts(config[key], value)
+                        else:
+                            config[key] = value
                 logger.info(f"Loaded pipeline config from {pipeline_config_path}")
         else:
             logger.warning(f"Pipeline config not found at {pipeline_config_path}")
@@ -239,13 +270,79 @@ class ConfigLoader:
 
     def get_data_root(self) -> Path:
         """
-        Get data root path
+        Get data root path (DEPRECATED - use get_bronze_path() for new code)
+
+        This returns the legacy data_root for backward compatibility.
+        New code should use Medallion Architecture paths:
+        - get_bronze_path() for validated Parquet
+        - get_silver_path() for enriched data
+        - get_gold_path() for production formats
 
         Returns:
-            Path to data root directory
+            Path to legacy data root directory
         """
         data_root = self.get('data_root', Path('data'))
         return Path(data_root) if not isinstance(data_root, Path) else data_root
+
+    def get_bronze_path(self) -> Path:
+        """
+        Get bronze layer path (validated Parquet data)
+
+        Returns:
+            Path to bronze directory
+        """
+        bronze_path = self.get('bronze_path')
+        if bronze_path:
+            return Path(bronze_path)
+        # Use data_lake_root/bronze
+        data_lake_root = self.get('data_lake_root')
+        if not data_lake_root:
+            raise ValueError("data_lake_root not configured in pipeline_config.yaml")
+        return Path(data_lake_root) / 'bronze'
+
+    def get_silver_path(self) -> Path:
+        """
+        Get silver layer path (enriched data with features)
+
+        Returns:
+            Path to silver directory
+        """
+        silver_path = self.get('silver_path')
+        if silver_path:
+            return Path(silver_path)
+        # Use data_lake_root/silver
+        data_lake_root = self.get('data_lake_root')
+        if not data_lake_root:
+            raise ValueError("data_lake_root not configured in pipeline_config.yaml")
+        return Path(data_lake_root) / 'silver'
+
+    def get_gold_path(self) -> Path:
+        """
+        Get gold layer path (production-ready ML formats)
+
+        Returns:
+            Path to gold directory
+        """
+        gold_path = self.get('gold_path')
+        if gold_path:
+            return Path(gold_path)
+        # Use data_lake_root/gold
+        data_lake_root = self.get('data_lake_root')
+        if not data_lake_root:
+            raise ValueError("data_lake_root not configured in pipeline_config.yaml")
+        return Path(data_lake_root) / 'gold'
+
+    def get_metadata_path(self) -> Path:
+        """
+        Get metadata path for watermarks and lineage
+
+        Returns:
+            Path to metadata directory
+        """
+        data_lake_root = self.get('data_lake_root')
+        if not data_lake_root:
+            raise ValueError("data_lake_root not configured in pipeline_config.yaml")
+        return Path(data_lake_root) / 'metadata'
 
     def get_credentials(self, service: str) -> Optional[Dict[str, Any]]:
         """
@@ -258,6 +355,22 @@ class ConfigLoader:
             Credentials dictionary or None
         """
         return self.get(f'credentials.{service}')
+
+    def get_environment(self) -> str:
+        """
+        Get the active environment name
+
+        Returns:
+            Environment name ('production', 'test', etc.)
+        """
+        paths_config_path = self.config_dir / 'paths.yaml'
+        if paths_config_path.exists():
+            with open(paths_config_path) as f:
+                paths_config = yaml.safe_load(f)
+                active_env = self.environment or paths_config.get('active_environment', 'production')
+                env_aliases = paths_config.get('environments', {})
+                return env_aliases.get(active_env, active_env)
+        return self.environment or 'production'
 
     @staticmethod
     def _deep_copy(d: Dict) -> Dict:
@@ -306,6 +419,10 @@ class ConfigLoader:
         print("\n" + "="*70)
         print("CONFIGURATION SUMMARY")
         print("="*70)
+
+        # Environment
+        print(f"\n🌍 Environment: {self.get_environment().upper()}")
+        print(f"  Data Lake: {self.get('data_lake_root', 'Not configured')}")
 
         # Pipeline settings
         print(f"\n⚙️  Pipeline:")

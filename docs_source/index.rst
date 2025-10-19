@@ -1,15 +1,7 @@
 QuantMini Documentation
 ========================
 
-**QuantMini** is a high-performance quantitative trading pipeline with Qlib integration for ML-driven strategies.
-
-.. image:: https://img.shields.io/pypi/v/quantmini.svg
-   :target: https://pypi.org/project/quantmini/
-   :alt: PyPI version
-
-.. image:: https://img.shields.io/pypi/pyversions/quantmini.svg
-   :target: https://pypi.org/project/quantmini/
-   :alt: Python versions
+**QuantMini** is a high-performance financial data pipeline with Medallion Architecture and Qlib integration for quantitative trading.
 
 .. image:: https://img.shields.io/github/license/nittygritty-zzy/quantmini.svg
    :target: https://github.com/nittygritty-zzy/quantmini/blob/main/LICENSE
@@ -18,36 +10,49 @@ QuantMini Documentation
 Features
 --------
 
-* **Data Pipeline**: Efficient ingestion from Polygon.io API
-* **Qlib Integration**: Binary format conversion for fast backtesting
-* **Alpha Expressions**: Comprehensive framework for creating trading signals
-* **ML Models**: Support for LightGBM, XGBoost, and CatBoost
-* **Trading Strategies**: TopkDropoutStrategy and EnhancedIndexingStrategy
-* **Comprehensive Examples**: 10+ example scripts demonstrating all features
+* **Medallion Architecture**: Bronze → Silver → Gold data lake pattern for data quality
+* **Polygon.io Integration**: REST API and S3 flat files data ingestion
+* **High-Performance Downloads**: Batch downloaders with massive parallelization
+* **Partitioned Storage**: Date-first and ticker-based Hive partitioning
+* **Qlib Integration**: Binary format conversion for fast ML backtesting
+* **Feature Engineering**: Alpha158 and custom technical indicators
+* **News Data**: 8+ years of financial news articles
+* **Delisted Stocks**: Complete handling of delisted ticker data
 
 Installation
 ------------
 
-Install via pip:
+Clone and install from source with uv:
 
 .. code-block:: bash
 
-   # Basic installation
-   pip install quantmini
+   # Clone repository
+   git clone https://github.com/nittygritty-zzy/quantmini.git
+   cd quantmini
 
-   # With ML models
-   pip install quantmini[ml]
+   # Install with uv
+   uv sync
 
-   # With development tools
-   pip install quantmini[dev]
-
-   # Everything
-   pip install quantmini[all]
+   # Configure credentials
+   cp config/credentials.yaml.example config/credentials.yaml
+   # Edit config/credentials.yaml with your Polygon.io API key
 
 Quick Start
 -----------
 
 Check out our :doc:`getting_started` guide or explore the :doc:`examples/index`.
+
+**Data Pipeline Architecture:**
+
+.. code-block:: text
+
+   Landing Layer          Bronze Layer         Silver Layer          Gold Layer
+   (Raw Sources)         (Validated)          (Enriched)            (ML-Ready)
+        ↓                    ↓                    ↓                     ↓
+   Polygon.io         →  Validated Parquet  →  Feature-Enriched  →  Qlib Binary
+     REST API             (Schema Check)        (Indicators)         (Backtesting)
+        ↓                    ↓                    ↓                     ↓
+   landing/              bronze/{type}/      silver/{type}/        gold/qlib/
 
 .. toctree::
    :maxdepth: 2

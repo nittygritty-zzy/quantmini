@@ -44,24 +44,29 @@ This architecture provides a unified data pipeline for processing financial mark
 
 ```
 ┌─────────────────────────────────────────────────────────────────────┐
-│              ADAPTIVE DATA PIPELINE ARCHITECTURE                      │
+│         MEDALLION ARCHITECTURE DATA PIPELINE                          │
+│  Landing → Bronze → Silver → Gold                                     │
 └─────────────────────────────────────────────────────────────────────┘
 
-    Polygon S3              Partitioned            Binary
-    (Source)                Parquet Lake           Format
-                            (Analytics)            (ML/Backtesting)
-        │                       │                      │
-        ▼                       ▼                      ▼
-   ┌─────────┐            ┌─────────┐           ┌─────────┐
-   │ CSV.GZ  │ ────────▶  │ Parquet │ ────────▶ │  Qlib   │
-   │Flatfiles│  Ingest    │ Tables  │ Transform │ Binary  │
-   └─────────┘            └─────────┘           └─────────┘
-        │                       │                      │
-        └─────────────────────────────────────────────┘
+   Landing Layer        Bronze Layer          Silver Layer        Gold Layer
+   (Raw Sources)        (Validated)           (Enriched)          (ML-Ready)
+        │                    │                     │                   │
+        ▼                    ▼                     ▼                   ▼
+   ┌─────────┐          ┌─────────┐           ┌─────────┐        ┌─────────┐
+   │ CSV.GZ  │ ──────▶  │ Parquet │ ────────▶ │ Parquet │ ─────▶ │  Qlib   │
+   │S3 Files │ Ingest   │ Bronze  │  Enrich   │ Silver  │Convert │  Gold   │
+   │Polygon  │          │Validated│           │Features │        │ Binary  │
+   └─────────┘          └─────────┘           └─────────┘        └─────────┘
+        │                    │                     │                   │
+        └────────────────────────────────────────────────────────────┘
                     Adaptive Processing Mode:
                     • Streaming (< 32GB RAM)
-                    • Batch (32-64GB RAM)  
+                    • Batch (32-64GB RAM)
                     • Parallel (> 64GB RAM)
+
+Data Access Limitations:
+  • Stocks: 5-year access (2020-10-18 to present)
+  • Options: 2-year access (2023-10-18 to present, 403 Forbidden for older)
 ```
 
 ### Processing Modes
@@ -74,88 +79,89 @@ This architecture provides a unified data pipeline for processing financial mark
 
 ---
 
-## Directory Structure
+## Directory Structure (Medallion Architecture)
 
 ```
-qlib_workspace/
+quantmini-lake/
 │
 ├── config/
 │   ├── system_profile.yaml         # Hardware capabilities
 │   ├── pipeline_config.yaml        # Processing settings
 │   └── credentials.yaml            # S3 credentials
 │
-├── data/
-│   ├── lake/                       # Parquet Data Lake
-│   │   ├── stocks/
-│   │   │   ├── daily/
-│   │   │   │   ├── raw/            # Partitioned by year/month
-│   │   │   │   │   ├── year=2024/
-│   │   │   │   │   │   ├── month=01/
-│   │   │   │   │   │   │   └── part-0.parquet
-│   │   │   │   │   │   └── month=02/
-│   │   │   │   │   └── year=2025/
-│   │   │   │   │       └── month=09/
-│   │   │   │   │           └── part-0.parquet
-│   │   │   │   └── enriched/       # With calculated features
-│   │   │   │       └── [same partition structure]
-│   │   │   │
-│   │   │   └── minute/
-│   │   │       ├── raw/            # Partitioned by symbol/year/month
-│   │   │       │   ├── symbol=AAPL/
-│   │   │       │   │   └── year=2025/month=09/part-0.parquet
-│   │   │       │   └── symbol=TSLA/
-│   │   │       └── enriched/
-│   │   │
-│   │   └── options/
-│   │       ├── daily/
-│   │       │   ├── raw/            # Partitioned by underlying/year/month
-│   │       │   └── enriched/
-│   │       └── minute/
-│   │           ├── raw/            # Partitioned by underlying/date
-│   │           └── enriched/
-│   │
-│   ├── binary/                     # ML-Optimized Format
-│   │   ├── stocks/
-│   │   │   ├── daily/
-│   │   │   │   ├── features/       # Organized by symbol
-│   │   │   │   │   ├── aapl/
-│   │   │   │   │   │   ├── open.day.bin
-│   │   │   │   │   │   ├── high.day.bin
-│   │   │   │   │   │   ├── low.day.bin
-│   │   │   │   │   │   ├── close.day.bin
-│   │   │   │   │   │   ├── volume.day.bin
-│   │   │   │   │   │   └── alpha_daily.day.bin
-│   │   │   │   │   └── tsla/
-│   │   │   │   ├── instruments/
-│   │   │   │   │   └── all.txt
-│   │   │   │   └── calendars/
-│   │   │   │       └── day.txt
-│   │   │   └── minute/
-│   │   │       └── [similar structure with .1min.bin]
-│   │   │
-│   │   └── options/
-│   │       └── [similar structure]
-│   │
-│   ├── metadata/                   # Fast Lookup Indexes
-│   │   ├── stocks/
-│   │   │   ├── symbols.parquet
-│   │   │   ├── daily_stats.parquet
-│   │   │   └── watermarks.json
-│   │   └── options/
-│   │       ├── contracts.parquet
-│   │       ├── chains.parquet
-│   │       └── watermarks.json
-│   │
-│   ├── cache/                      # Query Result Cache
-│   │   ├── queries/                # LRU cache
-│   │   └── aggregations/           # Pre-computed
-│   │
-│   ├── temp/                       # Streaming buffers
-│   │   └── chunks/                 # Temporary storage
-│   │
-│   └── archive/                    # Cold Storage
-│       ├── expired_options/
-│       └── historical/
+├── landing/                        # Landing Layer (Raw source data)
+│   ├── polygon-s3/                 # S3 flat files (time-series)
+│   │   ├── stocks_daily/          # 5-year access (2020-10-18 to present)
+│   │   ├── stocks_minute/         # 5-year access
+│   │   ├── options_daily/         # 2-year access (2023-10-18 to present)
+│   │   └── options_minute/        # 2-year access
+│   ├── polygon-api/                # REST API data
+│   └── external/                   # External sources
+│
+├── bronze/                         # Bronze Layer (Validated Parquet)
+│   ├── stocks_daily/              # Partitioned by year/month
+│   │   ├── year=2024/
+│   │   │   ├── month=01/
+│   │   │   │   └── part-0.parquet
+│   │   │   └── month=02/
+│   │   └── year=2025/
+│   │       └── month=09/
+│   │           └── part-0.parquet
+│   ├── stocks_minute/             # Partitioned by symbol/year/month
+│   │   ├── symbol=AAPL/
+│   │   │   └── year=2025/month=09/part-0.parquet
+│   │   └── symbol=TSLA/
+│   ├── options_daily/             # Partitioned by underlying/year/month
+│   └── options_minute/            # Partitioned by underlying/date
+│
+├── silver/                        # Silver Layer (Feature-enriched data)
+│   ├── stocks_daily/              # With calculated features
+│   │   └── [same partition structure as bronze]
+│   ├── stocks_minute/
+│   ├── options_daily/
+│   └── options_minute/
+│
+├── gold/                          # Gold Layer (ML-ready data)
+│   └── qlib/                      # Qlib binary format
+│       ├── stocks_daily/
+│       │   ├── features/          # Organized by symbol
+│       │   │   ├── aapl/
+│       │   │   │   ├── open.day.bin
+│       │   │   │   ├── high.day.bin
+│       │   │   │   ├── low.day.bin
+│       │   │   │   ├── close.day.bin
+│       │   │   │   ├── volume.day.bin
+│       │   │   │   └── alpha_daily.day.bin
+│       │   │   └── tsla/
+│       │   ├── instruments/
+│       │   │   └── all.txt
+│       │   └── calendars/
+│       │       └── day.txt
+│       ├── stocks_minute/
+│       │   └── [similar structure with .1min.bin]
+│       └── options/
+│           └── [similar structure]
+│
+├── metadata/                      # Fast Lookup Indexes
+│   ├── stocks/
+│   │   ├── symbols.parquet
+│   │   ├── daily_stats.parquet
+│   │   └── watermarks.json
+│   └── options/
+│       ├── contracts.parquet
+│       ├── chains.parquet
+│       └── watermarks.json
+│
+├── cache/                         # Query Result Cache
+│   ├── queries/                   # LRU cache
+│   └── aggregations/              # Pre-computed
+│
+├── temp/                          # Streaming buffers
+│   └── chunks/                    # Temporary storage
+│
+└── archive/                       # Cold Storage
+    ├── expired_options/
+    └── historical/
 │
 ├── scripts/
 │   ├── ingest/
@@ -771,7 +777,11 @@ class FeatureEngineer:
     
     def enrich_stocks_daily(self, partition_path: Path) -> Path:
         """Add computed features to daily stock data"""
-        output_path = partition_path.parent.parent / 'enriched' / partition_path.name
+        # Convert from bronze to silver (bronze → silver transformation)
+        bronze_base = self.data_root / 'bronze'
+        silver_base = self.data_root / 'silver'
+        relative_path = partition_path.relative_to(bronze_base)
+        output_path = silver_base / relative_path
         
         if self.mode in ['streaming', 'batch']:
             return self._enrich_with_duckdb(partition_path, output_path)
@@ -855,7 +865,7 @@ class QlibBinaryWriter:
         self.memory_monitor = MemoryMonitor()
     
     def convert_all_symbols(self):
-        """Convert to binary format using appropriate strategy"""
+        """Convert silver (enriched) Parquet to gold (Qlib binary) format"""
         if self.mode == 'streaming':
             self._convert_streaming()
         elif self.mode == 'batch':
@@ -910,10 +920,10 @@ class QlibBinaryWriter:
     
     def _convert_symbol(self, symbol: str):
         """Convert single symbol to binary"""
-        # Read symbol data
+        # Read symbol data from silver layer
         conn = duckdb.connect(':memory:')
         symbol_data = conn.execute(f"""
-            SELECT * FROM read_parquet('{self.parquet_root}/enriched/**/*.parquet')
+            SELECT * FROM read_parquet('{self.parquet_root}/silver/**/*.parquet')
             WHERE symbol = '{symbol}'
             ORDER BY date
         """).fetch_df()
@@ -941,11 +951,11 @@ class QlibBinaryWriter:
                     values.tofile(f)
     
     def _get_symbol_list(self) -> list:
-        """Get unique symbols efficiently"""
+        """Get unique symbols efficiently from silver layer"""
         conn = duckdb.connect(':memory:')
         symbols = conn.execute(f"""
-            SELECT DISTINCT symbol 
-            FROM read_parquet('{self.parquet_root}/enriched/**/*.parquet')
+            SELECT DISTINCT symbol
+            FROM read_parquet('{self.parquet_root}/silver/**/*.parquet')
             ORDER BY symbol
         """).fetch_df()['symbol'].tolist()
         conn.close()
@@ -992,7 +1002,7 @@ class QueryEngine:
         # Register Parquet files as views
         self.conn.execute(f"""
             CREATE VIEW stocks_daily AS
-            SELECT * FROM read_parquet('{self.data_root}/lake/stocks/daily/enriched/**/*.parquet')
+            SELECT * FROM read_parquet('{self.data_root}/silver/stocks_daily/**/*.parquet')
         """)
     
     def _init_polars(self):
@@ -1032,7 +1042,7 @@ class QueryEngine:
     def _query_polars(self, symbol: str, start_date: str, end_date: str) -> pd.DataFrame:
         """Polars query with lazy evaluation"""
         lazy = self.pl.scan_parquet(
-            f"{self.data_root}/lake/stocks/daily/enriched/**/*.parquet"
+            f"{self.data_root}/silver/stocks_daily/**/*.parquet"
         )
         
         result = lazy.filter(

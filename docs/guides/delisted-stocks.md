@@ -36,11 +36,11 @@ python scripts/download_delisted_stocks.py \
   --start-date 2024-01-01 \
   --end-date 2025-10-06
 
-# Convert to qlib format
+# Convert to qlib format (silver → gold layer)
 cd qlib_repo/scripts
 python dump_bin.py dump_fix \
-  --data_path=../../data/parquet \
-  --qlib_dir=/Volumes/sandisk/quantmini-data/data/qlib/stocks_daily \
+  --data_path=../../data/bronze \
+  --qlib_dir=/Volumes/sandisk/quantmini-lake/gold/qlib/stocks_daily \
   --freq=day \
   --file_suffix=.parquet \
   --exclude_fields=symbol,vwap
@@ -106,11 +106,11 @@ For each delisted stock, downloads daily OHLCV data from backtest start to delis
 ```python
 stats = downloader.download_historical_data(delisted, "2024-01-01")
 
-# Downloads to: data/parquet/[TICKER].parquet
+# Downloads to bronze layer: data/bronze/stocks_daily/[TICKER].parquet
 ```
 
 **Time**: ~4 minutes per 1,000 stocks
-**Format**: Parquet (same as S3 flat files)
+**Format**: Parquet (bronze layer - validated schema)
 **Fields**: date, open, high, low, close, volume, vwap
 
 ### 3. Convert to Qlib Format
@@ -142,28 +142,32 @@ quantmini/
 ├── docs/
 │   └── DELISTED_STOCKS.md          # This file
 └── data/
-    ├── parquet/                    # Downloaded parquet files
-    │   ├── DISH.parquet
-    │   ├── LTHM.parquet
-    │   └── ...
+    ├── bronze/                     # Bronze Layer (validated Parquet)
+    │   └── stocks_daily/
+    │       ├── DISH.parquet
+    │       ├── LTHM.parquet
+    │       └── ...
+    ├── gold/qlib/                  # Gold Layer (ML-ready)
+    │   └── stocks_daily/
     └── delisted_stocks.csv         # Reference list
 ```
 
-### Integration with Existing Pipeline
+### Integration with Medallion Architecture
 
-The delisted stocks feature integrates seamlessly:
+The delisted stocks feature integrates seamlessly with the Medallion Architecture:
 
 ```
-Existing Pipeline:
-  S3 Flat Files → Parquet → Qlib Binary
-  (Only active stocks)
+Active Stocks Pipeline:
+  S3 Flat Files (Landing) → Bronze → Silver → Gold/Qlib
+  (Active stocks from S3)
 
-New Pipeline (Delisted):
-  Polygon API → Parquet → Qlib Binary
-  (Delisted stocks only)
+Delisted Stocks Pipeline:
+  Polygon API → Bronze → Silver → Gold/Qlib
+  (Delisted stocks from API)
 
 Final Universe:
   Active Stocks + Delisted Stocks = Complete Universe ✓
+  (All stored in gold/qlib/stocks_daily/)
 ```
 
 ---
@@ -371,7 +375,7 @@ After adding delisted stocks:
 python scripts/verify_qlib_conversion.py
 
 # Check instruments count
-wc -l /Volumes/sandisk/quantmini-data/data/qlib/stocks_daily/instruments/all.txt
+wc -l /Volumes/sandisk/quantmini-lake/gold/qlib/stocks_daily/instruments/all.txt
 ```
 
 ---

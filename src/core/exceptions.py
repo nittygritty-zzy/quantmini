@@ -55,3 +55,8 @@ class WatermarkError(PipelineException):
 class APIError(PipelineException):
     """Polygon API request error"""
     pass
+
+
+class PolygonAPIError(APIError):
+    """Polygon REST API specific error"""
+    pass

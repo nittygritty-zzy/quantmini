@@ -102,3 +102,14 @@ local_config.yaml
 
 # Generated backfill scripts
 backfill_commands.sh
+
+# Test pipeline directory (local testing only)
+test_pipeline/
+
+# Cleanup and update summaries (temporary)
+CLEANUP_SUMMARY.md
+DOCUMENTATION_UPDATE.md
+
+# Ticker lists (can regenerate)
+tickers_*.txt
+!tickers_cs.txt

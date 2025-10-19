@@ -101,7 +101,7 @@ quantmini data download \
 - `-o, --output`: Output directory (default: `data/raw`)
 
 #### `quantmini data ingest`
-Ingest data into Parquet format.
+Ingest data from landing layer to bronze layer (validated Parquet).
 
 ```bash
 quantmini data ingest \
@@ -111,6 +111,11 @@ quantmini data ingest \
   --mode polars \
   --incremental
 ```
+
+**Transformation: Landing → Bronze**
+- Input: Raw CSV.GZ from `landing/polygon-s3/{data_type}/`
+- Output: Validated Parquet in `bronze/{data_type}/`
+- Process: Schema enforcement, type checking, data validation
 
 **Options:**
 - `-t, --data-type`: Type of data
@@ -124,7 +129,7 @@ quantmini data ingest \
 - `streaming`: Memory-efficient, for systems with <32GB RAM
 
 #### `quantmini data enrich`
-Add features to ingested data.
+Transform bronze layer to silver layer (add features).
 
 ```bash
 quantmini data enrich \
@@ -134,6 +139,11 @@ quantmini data enrich \
   --incremental
 ```
 
+**Transformation: Bronze → Silver**
+- Input: Validated Parquet from `bronze/{data_type}/`
+- Output: Feature-enriched Parquet in `silver/{data_type}/`
+- Process: Calculate technical indicators, returns, alpha factors
+
 **Features Added:**
 - Returns (1d, 5d, 20d)
 - Alpha factors
@@ -142,7 +152,7 @@ quantmini data enrich \
 - Volatility
 
 #### `quantmini data convert`
-Convert enriched data to Qlib binary format.
+Transform silver layer to gold layer (Qlib binary format).
 
 ```bash
 quantmini data convert \
@@ -152,10 +162,15 @@ quantmini data convert \
   --incremental
 ```
 
+**Transformation: Silver → Gold**
+- Input: Feature-enriched Parquet from `silver/{data_type}/`
+- Output: ML-ready Qlib binary in `gold/qlib/{data_type}/`
+- Process: Convert to optimized binary format for ML training/backtesting
+
 Outputs Qlib-compatible binary format:
-- `data/qlib/{data_type}/instruments/all.txt`
-- `data/qlib/{data_type}/calendars/day.txt`
-- `data/qlib/{data_type}/features/{symbol}/{feature}.bin`
+- `gold/qlib/{data_type}/instruments/all.txt`
+- `gold/qlib/{data_type}/calendars/day.txt`
+- `gold/qlib/{data_type}/features/{symbol}/{feature}.bin`
 
 #### `quantmini data query`
 Query enriched data.
@@ -212,7 +227,7 @@ quantmini data status \
 ### Pipeline Workflows
 
 #### `quantmini pipeline run`
-Run complete pipeline: ingest → enrich → convert.
+Run complete Medallion Architecture pipeline: Landing → Bronze → Silver → Gold.
 
 ```bash
 quantmini pipeline run \
@@ -220,6 +235,12 @@ quantmini pipeline run \
   --start-date 2024-01-01 \
   --end-date 2024-01-31
 ```
+
+**Full Pipeline Flow:**
+1. Landing: Download raw CSV.GZ from source
+2. Bronze: Ingest to validated Parquet
+3. Silver: Enrich with calculated features
+4. Gold: Convert to ML-ready Qlib binary
 
 **Options:**
 - `-t, --data-type`: Type of data
@@ -288,17 +309,22 @@ Checks:
 - Metadata file exists
 
 #### `quantmini validate parquet`
-Validate Parquet data integrity.
+Validate bronze and silver layer Parquet data integrity.
 
 ```bash
 quantmini validate parquet --data-type stocks_daily
 ```
 
+**Validates:**
+- Bronze layer: `bronze/{data_type}/` - validated raw data
+- Silver layer: `silver/{data_type}/` - feature-enriched data
+
 Shows:
-- Total partitions
-- Total size
-- Date range
+- Total partitions per layer
+- Total size per layer
+- Date range coverage
 - Symbol count
+- Schema consistency across partitions
 
 #### `quantmini validate config`
 Validate configuration files.
@@ -325,7 +351,7 @@ Validate production schema consistency across all datasets.
 quantmini schema validate
 
 # Validate with custom data root
-quantmini schema validate --data-root /Volumes/sandisk/quantmini-data
+quantmini schema validate --data-root /Volumes/sandisk/quantmini-lake
 ```
 
 Checks:
@@ -400,7 +426,7 @@ Verify Qlib binary format compatibility and data integrity.
 quantmini schema verify-qlib
 
 # With custom data root
-quantmini schema verify-qlib --data-root /Volumes/sandisk/quantmini-data
+quantmini schema verify-qlib --data-root /Volumes/sandisk/quantmini-lake
 ```
 
 Comprehensive verification includes:

@@ -4,21 +4,49 @@
 
 QuantMini stores data in a structured directory tree. You can configure the data location using environment variables or configuration files to match your setup.
 
-## Folder Structure
+## Folder Structure (Medallion Architecture)
 
 ```
 $DATA_ROOT/
-├── parquet/          # Raw and enriched parquet files
+├── landing/                # Landing Layer (raw source data)
+│   ├── polygon-s3/        # S3 flat files organized by source
+│   │   ├── stocks_daily/  # 5-year access (2020-10-18 to present)
+│   │   ├── stocks_minute/ # 5-year access
+│   │   ├── options_daily/ # 2-year access (2023-10-18 to present)
+│   │   └── options_minute/# 2-year access
+│   ├── polygon-api/       # REST API data
+│   └── external/          # External sources
+│
+├── bronze/                # Bronze Layer (validated Parquet)
 │   ├── stocks_daily/
 │   ├── stocks_minute/
 │   ├── options_daily/
 │   └── options_minute/
-├── enriched/         # Feature-engineered data
-├── qlib/            # Qlib binary format
-│   └── stocks_daily/
-├── metadata/        # Watermarks and processing state
-└── cache/           # Query cache
+│
+├── silver/                # Silver Layer (feature-enriched data)
+│   ├── stocks_daily/
+│   ├── stocks_minute/
+│   ├── options_daily/
+│   └── options_minute/
+│
+├── gold/                  # Gold Layer (ML-ready data)
+│   └── qlib/             # Qlib binary format
+│       ├── stocks_daily/
+│       ├── stocks_minute/
+│       └── options/
+│
+├── metadata/             # Watermarks and processing state
+│   ├── stocks/
+│   └── options/
+│
+└── cache/                # Query cache
 ```
+
+**Medallion Architecture Layers:**
+- **Landing**: Raw CSV.GZ files from source systems (time-series organized)
+- **Bronze**: Validated Parquet with schema enforcement
+- **Silver**: Enriched with calculated features and technical indicators
+- **Gold**: ML-ready binary format optimized for backtesting
 
 ## Configuration Methods
 
@@ -174,14 +202,25 @@ qlib_path = Path(DATA_ROOT) / 'qlib' / 'stocks_daily'
 
 ## Storage Requirements
 
-Approximate sizes for reference:
+Approximate sizes for reference (per layer):
 
-- **stocks_daily** (2 years): ~500 MB parquet, ~200 MB qlib
-- **stocks_minute** (2 years): ~150 GB parquet
-- **options_daily** (2 years): ~2 GB parquet
-- **options_minute** (1 month): ~50 GB parquet
+**Bronze Layer (Validated Parquet):**
+- stocks_daily (2 years): ~500 MB
+- stocks_minute (2 years): ~150 GB
+- options_daily (2 years): ~2 GB
+- options_minute (1 month): ~50 GB
 
-**Recommendation**: Start with **500 GB** for production use.
+**Silver Layer (Feature-enriched Parquet):**
+- Similar to bronze + ~20% for feature columns
+
+**Gold Layer (Qlib Binary):**
+- stocks_daily (2 years): ~200 MB
+- stocks_minute (2 years): ~60 GB
+
+**Landing Layer (Raw CSV.GZ):**
+- Temporary storage, typically cleaned after ingestion
+
+**Total Recommendation**: Start with **500 GB** for production use (includes all layers + overhead).
 
 ## Migration Guide
 
@@ -209,7 +248,7 @@ uv run quantmini data query --data-type stocks_daily --date 2025-01-02
 
 **Solution**:
 1. Check `DATA_ROOT` is set: `echo $DATA_ROOT`
-2. Verify data exists: `ls $DATA_ROOT/parquet`
+2. Verify data exists: `ls $DATA_ROOT/bronze` or `ls $DATA_ROOT/silver`
 3. Check permissions: Ensure read/write access
 
 ### Examples fail to initialize Qlib
@@ -217,7 +256,7 @@ uv run quantmini data query --data-type stocks_daily --date 2025-01-02
 **Symptom**: `qlib.init()` fails with "Provider not found"
 
 **Solution**:
-1. Ensure Qlib data is converted: `ls $DATA_ROOT/qlib/stocks_daily`
+1. Ensure Qlib data is converted: `ls $DATA_ROOT/gold/qlib/stocks_daily`
 2. Run conversion if needed: `uv run quantmini pipeline run --data-type stocks_daily --start-date 2024-01-01 --end-date 2024-12-31`
 3. Update example scripts to use correct `DATA_ROOT`
 

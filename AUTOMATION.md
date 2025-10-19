@@ -19,17 +19,19 @@ Automated data pipelines using macOS launchd.
 
 ### Daily Automation
 The daily automation (`scripts/daily_update.sh`) will:
-1. Download latest market data for stocks_daily, stocks_minute, and options_daily
-2. Enrich the data with calculated features
-3. Convert stocks_daily to Qlib binary format (incremental)
-4. Log all output to dated log files in `logs/`
+1. Download latest market data (landing layer)
+2. Ingest to bronze layer (validated Parquet)
+3. Enrich to silver layer (calculated features)
+4. Convert stocks_daily to gold layer (Qlib binary format, incremental)
+5. Log all output to dated log files in `logs/`
 
 ### Weekly Automation
 The weekly automation (`scripts/weekly_update.sh`) will:
 1. Query Polygon API for stocks delisted in the last 90 days
-2. Download historical OHLCV data for newly delisted stocks
-3. Convert to Qlib binary format (incremental)
-4. Log all output to `logs/weekly_*.log`
+2. Download historical OHLCV data to bronze layer
+3. Enrich to silver layer
+4. Convert to gold layer (Qlib binary format, incremental)
+5. Log all output to `logs/weekly_*.log`
 
 This fixes **survivorship bias** by ensuring delisted stocks are included in backtests.
 
@@ -183,7 +185,7 @@ This will:
 - **Setup script**: `scripts/setup_weekly_automation.sh`
 - **Logs**: `logs/weekly_YYYYMMDD_HHMMSS.log`
 - **Stdout/stderr**: `logs/weekly_stdout.log`, `logs/weekly_stderr.log`
-- **Downloaded data**: `data/parquet/`, `data/delisted_stocks.csv`
+- **Downloaded data**: `data/bronze/stocks_daily/`, `data/delisted_stocks.csv`
 
 ## Troubleshooting
 

@@ -2,11 +2,20 @@
 # This file contains all configurable settings for the data pipeline
 # This file IS COMMITTED to git - use relative paths or generic defaults
 
-# Data root directory
-# Default: ./data (relative to project root)
+# Data Lake Root (Medallion Architecture: Landing → Bronze → Silver → Gold)
+data_lake_root: /Volumes/sandisk/quantmini-lake
+
+# Layer-specific paths
+landing_path: /Volumes/sandisk/quantmini-lake/landing
+bronze_path: /Volumes/sandisk/quantmini-lake/bronze
+silver_path: /Volumes/sandisk/quantmini-lake/silver
+gold_path: /Volumes/sandisk/quantmini-lake/gold
+
+# Legacy data root (deprecated - kept for backward compatibility)
+# Default: /Volumes/sandisk/quantmini-data (external drive)
 # For your personal path: Edit config/system_profile.yaml (gitignored)
 # Or set DATA_ROOT environment variable
-data_root: data
+data_root: /Volumes/sandisk/quantmini-data
 
 pipeline:
   # Processing mode: adaptive, streaming, batch, or parallel
@@ -19,6 +28,32 @@ pipeline:
     - stocks_minute
     - options_daily
     - options_minute
+
+  # Data lake layer settings
+  layers:
+    landing:
+      retention_days: 30  # Keep raw files for 30 days
+      compression: gzip
+      format: csv
+
+    bronze:
+      format: parquet
+      compression: zstd
+      validation_enabled: true
+      schema_enforcement: true
+
+    silver:
+      format: parquet
+      compression: zstd
+      features_enabled: true
+      data_quality_checks: true
+
+    gold:
+      formats:
+        - qlib      # ML-ready binary format
+        - duckdb    # Analytics database
+        - parquet   # Production exports
+      optimization_level: high
 
 # Data source settings
 source:

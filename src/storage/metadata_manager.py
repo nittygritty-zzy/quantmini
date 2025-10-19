@@ -529,7 +529,8 @@ def main():
 
     try:
         config = ConfigLoader()
-        metadata_root = config.get_data_root() / 'metadata'
+        # Use metadata path from Medallion Architecture
+        metadata_root = config.get_metadata_path()
         manager = MetadataManager(metadata_root)
 
         print("✅ MetadataManager initialized")

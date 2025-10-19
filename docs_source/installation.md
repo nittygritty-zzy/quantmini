@@ -3,73 +3,97 @@
 ## Requirements
 
 - Python 3.10 or higher
-- pip or uv package manager
+- uv package manager (recommended)
+- External storage (recommended: 500GB+ for comprehensive data)
+- Polygon.io account with API key and S3 access
 
 ## Installation Methods
 
-### Via pip (Recommended)
+### From Source (Recommended)
 
-Install from PyPI:
-
-```bash
-pip install quantmini
-```
-
-### With Optional Dependencies
-
-QuantMini offers several optional dependency groups:
+Install from GitHub repository:
 
 ```bash
-# ML models (LightGBM, XGBoost, CatBoost)
-pip install quantmini[ml]
-
-# Development tools (pytest, coverage)
-pip install quantmini[dev]
-
-# Everything
-pip install quantmini[all]
-```
-
-### From Source
-
-For development or to get the latest unreleased features:
-
-```bash
+# Clone repository
 git clone https://github.com/nittygritty-zzy/quantmini.git
 cd quantmini
-pip install -e ".[all]"
+
+# Install with uv
+uv sync
+
+# Activate virtual environment
+source .venv/bin/activate
 ```
 
-### Using uv (Alternative)
+### External Drive Setup
 
-If you prefer the `uv` package manager:
+If installing on an external drive, use copy mode:
 
 ```bash
-uv pip install quantmini[all]
+export UV_LINK_MODE=copy
+uv sync
+```
+
+Add to your shell profile (`~/.zshrc` or `~/.bashrc`):
+
+```bash
+echo 'export UV_LINK_MODE=copy' >> ~/.zshrc
+source ~/.zshrc
+```
+
+## Configuration
+
+### 1. Credentials
+
+Copy and configure credentials:
+
+```bash
+cp config/credentials.yaml.example config/credentials.yaml
+```
+
+Edit `config/credentials.yaml`:
+
+```yaml
+polygon:
+  api_key: "YOUR_POLYGON_API_KEY"
+  s3:
+    access_key_id: "YOUR_S3_ACCESS_KEY"
+    secret_access_key: "YOUR_S3_SECRET_KEY"
+```
+
+### 2. Data Storage
+
+Configure data root in `config/pipeline_config.yaml`:
+
+```yaml
+data_root: /Volumes/sandisk/quantmini-lake
+```
+
+Or set environment variable:
+
+```bash
+export DATA_ROOT=/Volumes/sandisk/quantmini-lake
 ```
 
 ## Verify Installation
 
 Check that QuantMini is installed correctly:
 
-```python
-import src
-print("QuantMini installed successfully!")
+```bash
+source .venv/bin/activate
+python -c "from src.core.config_loader import ConfigLoader; print('QuantMini installed successfully!')"
 ```
 
 ## Dependencies
 
 ### Core Dependencies
 
-- pyarrow >= 18.1.0
-- polars >= 1.18.0
-- pandas >= 2.2.3
-- aioboto3 >= 13.0.1
-- boto3 >= 1.35.74
-- pyyaml >= 6.0.2
-- psutil >= 6.1.1
-- duckdb >= 1.0.0
-- pyqlib >= 0.9.0
+- **Data Processing**: polars >= 1.18.0, pandas >= 2.2.3, pyarrow >= 18.1.0
+- **Cloud Storage**: aioboto3 >= 13.0.1, boto3 >= 1.35.74
+- **Database**: duckdb >= 1.0.0
+- **ML Framework**: pyqlib >= 0.9.0
+- **Configuration**: pyyaml >= 6.0.2
+- **System**: psutil >= 6.1.1
 
 ### Optional: ML Dependencies
 
@@ -85,31 +109,66 @@ print("QuantMini installed successfully!")
 - pytest-asyncio >= 0.25.2
 - pytest-cov >= 6.0.0
 
+## Directory Structure
+
+After installation, the data directory structure will be:
+
+```
+$DATA_ROOT/
+├── landing/           # Raw source data
+├── bronze/            # Validated Parquet files
+├── silver/            # Feature-enriched data
+└── gold/qlib/         # ML-ready binary format
+```
+
 ## Troubleshooting
 
-### Issue: Build fails on macOS
+### Issue: "Failed to clone files" warning
 
-Some dependencies may require additional build tools:
-
-```bash
-brew install cmake
-pip install quantmini[all]
-```
-
-### Issue: NumPy version conflicts
-
-If you encounter NumPy compatibility issues:
+**Solution**: Use copy mode for external drives:
 
 ```bash
-pip install --upgrade numpy
-pip install quantmini[all]
+UV_LINK_MODE=copy uv sync
 ```
 
-### Issue: Qlib installation fails
+### Issue: Virtual environment not working
 
-Qlib requires specific versions. Try:
+**Solution**: Recreate the virtual environment:
 
 ```bash
-pip install pyqlib==0.9.0
-pip install quantmini
+rm -rf .venv
+uv venv
+source .venv/bin/activate
+uv sync
 ```
+
+### Issue: Import errors
+
+**Solution**: Make sure the virtual environment is activated:
+
+```bash
+source .venv/bin/activate
+```
+
+### Issue: Polygon credentials not found
+
+**Solution**: Verify credentials file exists and has correct format:
+
+```bash
+cat config/credentials.yaml
+```
+
+### Issue: Data directory not found
+
+**Solution**: Create the directory structure:
+
+```bash
+mkdir -p $DATA_ROOT/{landing,bronze,silver,gold/qlib}
+```
+
+## Next Steps
+
+1. **Configure credentials**: Add your Polygon.io API key and S3 credentials
+2. **Download data**: See [Getting Started](getting_started.md) guide
+3. **Run tests**: Verify installation with `pytest tests/`
+4. **Explore examples**: Check `examples/` directory

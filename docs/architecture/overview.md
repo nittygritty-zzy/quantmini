@@ -123,52 +123,55 @@ quantmini/
 │   ├── compact_partitions.py          # Partition compaction
 │   └── generate_report.py             # Performance reporting
 │
-├── data/                              # Data storage (add to .gitignore)
-│   ├── lake/                          # Parquet data lake
-│   │   ├── stocks/
-│   │   │   ├── daily/
-│   │   │   │   ├── raw/               # Partitioned by year/month
-│   │   │   │   │   ├── year=2024/
-│   │   │   │   │   │   ├── month=01/
-│   │   │   │   │   │   │   └── part-0.parquet
-│   │   │   │   │   │   └── month=02/
-│   │   │   │   │   └── year=2025/
-│   │   │   │   │       └── month=09/
-│   │   │   │   └── enriched/          # With features
-│   │   │   │       └── [same structure]
-│   │   │   └── minute/
-│   │   │       ├── raw/               # Partitioned by symbol/year/month
-│   │   │       │   ├── symbol=AAPL/
-│   │   │       │   └── symbol=TSLA/
-│   │   │       └── enriched/
-│   │   │
-│   │   └── options/
-│   │       ├── daily/
-│   │       │   ├── raw/               # Partitioned by underlying/year/month
-│   │       │   └── enriched/
-│   │       └── minute/
-│   │           ├── raw/               # Partitioned by underlying/date
-│   │           └── enriched/
+├── data/                              # Data storage (Medallion Architecture)
+│   ├── landing/                       # Landing Layer (raw source data)
+│   │   ├── polygon-s3/               # S3 flat files (time-series)
+│   │   │   ├── stocks_daily/         # 5-year access (2020-10-18 to present)
+│   │   │   ├── stocks_minute/        # 5-year access
+│   │   │   ├── options_daily/        # 2-year access (2023-10-18 to present)
+│   │   │   └── options_minute/       # 2-year access
+│   │   ├── polygon-api/              # REST API data
+│   │   └── external/                 # External sources
 │   │
-│   ├── binary/                        # ML-optimized binary format
-│   │   ├── stocks/
-│   │   │   ├── daily/
-│   │   │   │   ├── features/          # Organized by symbol
-│   │   │   │   │   ├── aapl/
-│   │   │   │   │   │   ├── open.day.bin
-│   │   │   │   │   │   ├── high.day.bin
-│   │   │   │   │   │   ├── close.day.bin
-│   │   │   │   │   │   └── alpha_daily.day.bin
-│   │   │   │   │   └── tsla/
-│   │   │   │   ├── instruments/
-│   │   │   │   │   └── all.txt
-│   │   │   │   └── calendars/
-│   │   │   │       └── day.txt
-│   │   │   └── minute/
-│   │   │       └── [similar structure with .1min.bin]
-│   │   │
-│   │   └── options/
-│   │       └── [similar structure]
+│   ├── bronze/                        # Bronze Layer (validated Parquet)
+│   │   ├── stocks_daily/             # Partitioned by year/month
+│   │   │   ├── year=2024/
+│   │   │   │   ├── month=01/
+│   │   │   │   │   └── part-0.parquet
+│   │   │   │   └── month=02/
+│   │   │   └── year=2025/
+│   │   │       └── month=09/
+│   │   │           └── part-0.parquet
+│   │   ├── stocks_minute/            # Partitioned by symbol/year/month
+│   │   │   ├── symbol=AAPL/
+│   │   │   └── symbol=TSLA/
+│   │   ├── options_daily/            # Partitioned by underlying/year/month
+│   │   └── options_minute/           # Partitioned by underlying/date
+│   │
+│   ├── silver/                        # Silver Layer (feature-enriched)
+│   │   ├── stocks_daily/             # Same structure as bronze + features
+│   │   ├── stocks_minute/
+│   │   ├── options_daily/
+│   │   └── options_minute/
+│   │
+│   ├── gold/                          # Gold Layer (ML-ready data)
+│   │   └── qlib/                     # Qlib binary format
+│   │       ├── stocks_daily/
+│   │       │   ├── features/         # Organized by symbol
+│   │       │   │   ├── aapl/
+│   │       │   │   │   ├── open.day.bin
+│   │       │   │   │   ├── high.day.bin
+│   │       │   │   │   ├── close.day.bin
+│   │       │   │   │   └── alpha_daily.day.bin
+│   │       │   │   └── tsla/
+│   │       │   ├── instruments/
+│   │       │   │   └── all.txt
+│   │       │   └── calendars/
+│   │       │       └── day.txt
+│   │       ├── stocks_minute/
+│   │       │   └── [similar structure with .1min.bin]
+│   │       └── options/
+│   │           └── [similar structure]
 │   │
 │   ├── metadata/                      # Fast lookup indexes
 │   │   ├── stocks/
@@ -363,11 +366,12 @@ mkdir -p pipeline_design/sample_files
 # Source code
 mkdir -p src/{core,download,ingest,storage,features,transform,query,orchestration,maintenance,optimizations,monitoring,utils}
 
-# Data directories (with .gitkeep to track empty dirs)
-mkdir -p data/{lake/stocks/{daily/{raw,enriched},minute/{raw,enriched}},lake/options/{daily/{raw,enriched},minute/{raw,enriched}}}
-mkdir -p data/qlib/stocks/{daily/{features,instruments,calendars},minute/{features,instruments,calendars}}
-mkdir -p data/qlib/options/{daily/{features,instruments,calendars},minute/{features,instruments,calendars}}
-mkdir -p data/{metadata/stocks,metadata/options,cache/{queries,aggregations},temp/chunks,archive/{expired_options,historical}}
+# Data directories (Medallion Architecture with .gitkeep to track empty dirs)
+mkdir -p data/landing/{polygon-s3/{stocks_daily,stocks_minute,options_daily,options_minute},polygon-api,external}
+mkdir -p data/bronze/{stocks_daily,stocks_minute,options_daily,options_minute}
+mkdir -p data/silver/{stocks_daily,stocks_minute,options_daily,options_minute}
+mkdir -p data/gold/qlib/{stocks_daily/{features,instruments,calendars},stocks_minute/{features,instruments,calendars},options/{features,instruments,calendars}}
+mkdir -p data/{metadata/{stocks,options},cache/{queries,aggregations},temp/chunks,archive/{expired_options,historical}}
 
 # Logs
 mkdir -p logs/{pipeline,errors,performance,monitoring}
@@ -430,7 +434,7 @@ LOG_LEVEL=INFO
 MAX_MEMORY_GB=20
 
 # Paths (override in .env or environment)
-DATA_ROOT=/Volumes/sandisk/quantmini-data
+DATA_ROOT=/Volumes/sandisk/quantmini-lake
 CONFIG_ROOT=./config
 LOG_ROOT=./logs
 ```

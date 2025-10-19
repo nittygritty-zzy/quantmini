@@ -9,16 +9,16 @@
 
 This project uses Qlib as the quantitative research and backtesting framework. We convert our data into Qlib's binary format for efficient access during model training and backtesting.
 
-## Integration Architecture
+## Integration Architecture (Medallion Pattern)
 
 ```
-Raw Data (Polygon.io)
+Landing Layer (Raw CSV.GZ)
     ↓
-Parquet Storage
+Bronze Layer (Validated Parquet)
     ↓
-Feature Engineering
+Silver Layer (Feature-Enriched Parquet)
     ↓
-Qlib Binary Format  ← We are here
+Gold Layer (Qlib Binary Format)  ← We are here
     ↓
 Qlib Data Layer
     ↓
@@ -35,31 +35,32 @@ We use Qlib's **LocalProvider** with binary format data:
 import qlib
 from qlib.config import REG_CN
 
-# Initialize Qlib
+# Initialize Qlib with gold layer path
 qlib.init(
-    provider_uri='data/qlib/stocks_daily',
+    provider_uri='data/gold/qlib/stocks_daily',  # Gold layer
     region=REG_CN
 )
 ```
 
-### Data Format
+### Data Format (Gold Layer)
 
-Qlib expects data in a specific binary format:
+Qlib expects data in a specific binary format stored in the gold layer:
 
 ```
-data/qlib/stocks_daily/
+data/gold/qlib/stocks_daily/        # Gold layer ML-ready format
 ├── calendars/
-│   └── day.txt                 # Trading days list
+│   └── day.txt                     # Trading days list
 ├── instruments/
-│   └── all.txt                 # Symbol list with date ranges
+│   └── all.txt                     # Symbol list with date ranges
 └── features/
-    ├── AAPL/
-    │   ├── open.bin            # Binary feature data
-    │   ├── high.bin
-    │   ├── low.bin
-    │   ├── close.bin
-    │   └── volume.bin
-    └── TSLA/
+    ├── aapl/                       # Lowercase symbol directories
+    │   ├── open.day.bin            # Binary feature data
+    │   ├── high.day.bin
+    │   ├── low.day.bin
+    │   ├── close.day.bin
+    │   ├── volume.day.bin
+    │   └── alpha_daily.day.bin     # Calculated features from silver layer
+    └── tsla/
         └── ...
 ```
 
@@ -87,10 +88,10 @@ uv run python scripts/convert_to_qlib.py \
 from src.transform.qlib_binary_writer import QlibBinaryWriter
 from pathlib import Path
 
-# Initialize writer
+# Initialize writer (converts silver → gold)
 writer = QlibBinaryWriter(
-    enriched_root=Path('data/enriched'),
-    qlib_root=Path('data/qlib')
+    silver_root=Path('data/silver'),      # Input: feature-enriched data
+    qlib_root=Path('data/gold/qlib')      # Output: ML-ready binary format
 )
 
 # Convert data

@@ -457,7 +457,8 @@ def main():
 
     try:
         config = ConfigLoader()
-        root_path = config.get_data_root() / 'parquet'
+        # Use bronze layer for validated Parquet data (Medallion Architecture)
+        root_path = config.get_bronze_path()
 
         print("✅ ParquetManager initialized")
         print(f"   Root: {root_path}")

@@ -29,6 +29,13 @@ Usage:
         --start-date 2025-09-29 \\
         --end-date 2025-09-29 \\
         --no-incremental
+
+    # Process large date range sequentially (year-by-year to avoid memory issues)
+    python scripts/enrich_features.py \\
+        --data-type stocks_minute \\
+        --start-date 2020-10-17 \\
+        --end-date 2025-10-17 \\
+        --sequential
 """
 
 import argparse
@@ -94,7 +101,13 @@ def main():
         type=Path,
         help='Override enriched output path'
     )
-    
+
+    parser.add_argument(
+        '--sequential',
+        action='store_true',
+        help='Process year-by-year to avoid memory issues (recommended for large date ranges)'
+    )
+
     args = parser.parse_args()
     
     # Determine data types
@@ -111,46 +124,90 @@ def main():
     # Initialize config first
     config = ConfigLoader()
 
-    # Paths - use data_root from config (supports external drives)
-    data_root = Path(config.get('data_root', 'data'))
-    parquet_root = args.parquet_root or data_root / 'data' / 'parquet'
-    enriched_root = args.enriched_root or data_root / 'data' / 'enriched'
+    # Paths - use Medallion Architecture paths
+    # Bronze layer = validated Parquet, Silver layer = enriched features
+    parquet_root = args.parquet_root or config.get_bronze_path()
+    enriched_root = args.enriched_root or config.get_silver_path()
     
     logger.info(f"Feature Engineering: {args.start_date} to {args.end_date}")
     logger.info(f"Data types: {data_types}")
     logger.info(f"Incremental: {not args.no_incremental}")
+    logger.info(f"Sequential: {args.sequential}")
     logger.info(f"Raw data: {parquet_root}")
     logger.info(f"Enriched output: {enriched_root}")
-    
+
+    # If sequential mode, break into yearly chunks
+    if args.sequential:
+        from datetime import datetime
+        start = datetime.strptime(args.start_date, '%Y-%m-%d')
+        end = datetime.strptime(args.end_date, '%Y-%m-%d')
+
+        year_ranges = []
+        current_year = start.year
+        while current_year <= end.year:
+            year_start = max(start, datetime(current_year, 1, 1)).strftime('%Y-%m-%d')
+            year_end = min(end, datetime(current_year, 12, 31)).strftime('%Y-%m-%d')
+            year_ranges.append((year_start, year_end, current_year))
+            current_year += 1
+
+        logger.info(f"\nProcessing {len(year_ranges)} year(s) sequentially:")
+        for year_start, year_end, year in year_ranges:
+            logger.info(f"  - {year}: {year_start} to {year_end}")
+    else:
+        year_ranges = [(args.start_date, args.end_date, None)]
+
     # Process each data type
     all_results = {}
-    
+
     for data_type in data_types:
         logger.info(f"\n{'='*70}")
         logger.info(f"Enriching: {data_type}")
         logger.info(f"{'='*70}")
         
         try:
-            with FeatureEngineer(
-                parquet_root=parquet_root,
-                enriched_root=enriched_root,
-                config=config
-            ) as engineer:
-                
-                result = engineer.enrich_date_range(
-                    data_type=data_type,
-                    start_date=args.start_date,
-                    end_date=args.end_date,
-                    incremental=not args.no_incremental
-                )
-                
-                all_results[data_type] = result
-                
-                logger.info(f"\n✅ {data_type} Complete:")
-                logger.info(f"   Dates processed: {result['dates_processed']}")
-                logger.info(f"   Records enriched: {result['records_enriched']:,}")
-                logger.info(f"   Features added: {result['features_added']}")
-                logger.info(f"   Errors: {len(result['errors'])}")
+            # Accumulate results across all years
+            combined_result = {
+                'dates_processed': 0,
+                'records_enriched': 0,
+                'features_added': [],
+                'errors': []
+            }
+
+            # Process each year range
+            for year_start, year_end, year in year_ranges:
+                if year is not None:
+                    logger.info(f"\n--- Processing {data_type} for year {year} ---")
+
+                with FeatureEngineer(
+                    parquet_root=parquet_root,
+                    enriched_root=enriched_root,
+                    config=config
+                ) as engineer:
+
+                    result = engineer.enrich_date_range(
+                        data_type=data_type,
+                        start_date=year_start,
+                        end_date=year_end,
+                        incremental=not args.no_incremental
+                    )
+
+                    # Accumulate results
+                    combined_result['dates_processed'] += result['dates_processed']
+                    combined_result['records_enriched'] += result['records_enriched']
+                    if result['features_added']:
+                        combined_result['features_added'] = result['features_added']
+                    combined_result['errors'].extend(result['errors'])
+
+                    if year is not None:
+                        logger.info(f"✅ Year {year} complete: {result['records_enriched']:,} records")
+
+            all_results[data_type] = combined_result
+
+            logger.info(f"\n✅ {data_type} Complete:")
+            logger.info(f"   Dates processed: {combined_result['dates_processed']}")
+            logger.info(f"   Records enriched: {combined_result['records_enriched']:,}")
+            logger.info(f"   Features added: {combined_result['features_added']}")
+            logger.info(f"   Errors: {len(combined_result['errors'])}")
                 
         except Exception as e:
             logger.error(f"❌ {data_type} failed: {e}", exc_info=True)

@@ -1,0 +1,58 @@
+# QuantMini Data Lake Path Configuration
+#
+# This file centralizes all data lake path configuration.
+# Switch between production and test environments by changing the 'active_environment' setting.
+#
+# Usage:
+#   - Set 'active_environment' to 'production' or 'test'
+#   - All pipeline components will automatically use the correct paths
+#   - No code changes needed to switch environments
+
+# Active environment: 'production' or 'test'
+active_environment: production
+
+# Production environment paths
+production:
+  # Main data lake root (Medallion Architecture)
+  data_lake_root: /Volumes/sandisk/quantmini-lake
+
+  # Explicit layer paths (optional - will use data_lake_root/<layer> if not specified)
+  bronze_path: /Volumes/sandisk/quantmini-lake/bronze
+  silver_path: /Volumes/sandisk/quantmini-lake/silver
+  gold_path: /Volumes/sandisk/quantmini-lake/gold
+
+  # Metadata and logs
+  metadata_path: /Volumes/sandisk/quantmini-lake/metadata
+  logs_path: /Volumes/sandisk/quantmini-lake/logs
+
+# Test environment paths (for development/testing)
+test:
+  # Test data lake (usually smaller, local storage)
+  data_lake_root: /Users/zheyuanzhao/workspace/quantmini/data/test-lake
+
+  # Test layer paths
+  bronze_path: /Users/zheyuanzhao/workspace/quantmini/data/test-lake/bronze
+  silver_path: /Users/zheyuanzhao/workspace/quantmini/data/test-lake/silver
+  gold_path: /Users/zheyuanzhao/workspace/quantmini/data/test-lake/gold
+
+  # Test metadata and logs
+  metadata_path: /Users/zheyuanzhao/workspace/quantmini/data/test-lake/metadata
+  logs_path: /Users/zheyuanzhao/workspace/quantmini/data/test-lake/logs
+
+# Environment aliases (for quick reference)
+environments:
+  prod: production
+  dev: test
+  staging: test
+  local: test
+
+# Path validation rules
+validation:
+  # Require data_lake_root to be an absolute path
+  require_absolute_paths: true
+
+  # Create directories if they don't exist
+  auto_create_directories: true
+
+  # Minimum free space required (in GB)
+  min_free_space_gb: 50

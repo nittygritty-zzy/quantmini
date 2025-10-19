@@ -91,7 +91,7 @@ quantmini data query --data-type stocks_daily \
 
 See [CLI.md](CLI.md) for complete CLI documentation.
 
-## 📁 Project Structure
+## 📁 Project Structure (Medallion Architecture)
 
 ```
 quantmini/
@@ -99,15 +99,19 @@ quantmini/
 ├── src/                 # Source code
 │   ├── core/           # System profiling, memory monitoring
 │   ├── download/       # S3 downloaders
-│   ├── ingest/         # Data ingestion (streaming/batch/parallel)
-│   ├── storage/        # Parquet data lake
-│   ├── features/       # Feature engineering
-│   ├── transform/      # Binary format conversion
+│   ├── ingest/         # Data ingestion (landing → bronze)
+│   ├── storage/        # Parquet storage management
+│   ├── features/       # Feature engineering (bronze → silver)
+│   ├── transform/      # Binary conversion (silver → gold)
 │   ├── query/          # Query engine
 │   └── orchestration/  # Pipeline orchestration
 ├── data/               # Data storage (not in git)
-│   ├── lake/          # Parquet data lake
-│   ├── binary/        # Qlib binary format
+│   ├── landing/       # Landing layer: raw source data
+│   │   └── polygon-s3/  # CSV.GZ files from S3
+│   ├── bronze/        # Bronze layer: validated Parquet
+│   ├── silver/        # Silver layer: feature-enriched Parquet
+│   ├── gold/          # Gold layer: ML-ready formats
+│   │   └── qlib/      # Qlib binary format
 │   └── metadata/      # Watermarks, indexes
 ├── scripts/           # Command-line scripts
 ├── tests/             # Test suite
@@ -173,28 +177,29 @@ The pipeline processes four types of data from Polygon.io:
 3. **Options Daily Aggregates**: Daily options data per underlying
 4. **Options Minute Aggregates**: Minute-level options data (all contracts)
 
-## 🎨 Architecture
+## 🎨 Architecture (Medallion Pattern)
 
 ```
-S3 CSV.GZ Files
-      ↓
-Adaptive Ingestion (Streaming/Batch/Parallel)
-      ↓
-Parquet Data Lake (Partitioned)
-      ↓
-Feature Engineering (DuckDB/Polars)
-      ↓
-Qlib Binary Format (ML-Ready)
+Landing Layer          Bronze Layer        Silver Layer         Gold Layer
+(Raw Sources)         (Validated)          (Enriched)          (ML-Ready)
+     ↓                     ↓                    ↓                   ↓
+S3 CSV.GZ Files  →  Validated Parquet  →  Feature-Enriched  →  Qlib Binary
+  (Polygon)            (Schema Check)       (Indicators)        (Backtesting)
+
+Adaptive Ingestion: Streaming/Batch/Parallel based on available memory
+Feature Engineering: DuckDB/Polars for calculated indicators
+Binary Conversion: Optimized for ML training and backtesting
 ```
 
-## 🚦 Pipeline Stages
+## 🚦 Pipeline Stages (Medallion Architecture)
 
-1. **Download**: Async S3 downloads with connection pooling
-2. **Ingest**: Adaptive processing based on available memory
-3. **Validate**: Data quality checks
-4. **Enrich**: Feature engineering (alpha, returns, etc.)
-5. **Convert**: Transform to qlib binary format
-6. **Query**: Fast access via DuckDB/Polars
+1. **Landing**: Async S3 downloads to `landing/polygon-s3/`
+2. **Bronze**: Ingest and validate to `bronze/` - schema enforcement, type checking
+3. **Silver**: Enrich with features to `silver/` - calculated indicators, returns, alpha
+4. **Gold**: Convert to ML formats in `gold/qlib/` - optimized for backtesting
+5. **Query**: Fast access via DuckDB/Polars from any layer
+
+**Data Quality Progression**: Landing (raw) → Bronze (validated) → Silver (enriched) → Gold (ML-ready)
 
 ## 🔐 Security
 
