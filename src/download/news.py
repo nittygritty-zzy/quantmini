@@ -10,7 +10,7 @@ Downloads:
 - Sentiment insights
 - Keywords and related tickers
 
-Partition structure: news/year=YYYY/month=MM/ticker=SYMBOL.parquet
+Partition structure: news/year=YYYY/month=MM/day=DD/ticker=SYMBOL.parquet
 """
 
 import polars as pl
@@ -123,25 +123,28 @@ class NewsDownloader:
         df = df.with_columns([
             pl.col('_datetime_parsed').dt.year().cast(pl.Int32).alias('year'),
             pl.col('_datetime_parsed').dt.month().cast(pl.Int32).alias('month'),
+            pl.col('_datetime_parsed').dt.day().cast(pl.Int32).alias('day'),
         ]).drop('_datetime_parsed')
 
-        # Get unique year/month/ticker combinations
-        partitions = df.select(['year', 'month', 'ticker']).unique()
+        # Get unique year/month/day/ticker combinations
+        partitions = df.select(['year', 'month', 'day', 'ticker']).unique()
 
         for row in partitions.iter_rows(named=True):
             year = row['year']
             month = row['month']
+            day = row['day']
             ticker_name = row['ticker']
 
             # Filter for this partition
             partition_df = df.filter(
                 (pl.col('year') == year) &
                 (pl.col('month') == month) &
+                (pl.col('day') == day) &
                 (pl.col('ticker') == ticker_name)
-            ).drop(['year', 'month'])
+            ).drop(['year', 'month', 'day'])
 
-            # Create partition directory: news/year=2024/month=10/ticker=AAPL.parquet
-            partition_dir = self.output_dir / 'news' / f'year={year}' / f'month={month:02d}'
+            # Create partition directory: news/year=2024/month=10/day=18/ticker=AAPL.parquet
+            partition_dir = self.output_dir / 'news' / f'year={year}' / f'month={month:02d}' / f'day={day:02d}'
             partition_dir.mkdir(parents=True, exist_ok=True)
 
             output_file = partition_dir / f'ticker={ticker_name}.parquet'
