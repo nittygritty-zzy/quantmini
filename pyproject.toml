@@ -1,7 +1,7 @@
 [project]
 name = "quantmini"
-version = "0.1.0"
-description = "High-Performance Data Pipeline for Financial Market Data with Qlib Integration"
+version = "0.2.0"
+description = "High-Performance Medallion Architecture Data Pipeline for Financial Market Data with Qlib Integration"
 readme = "README.md"
 requires-python = ">=3.10"
 license = {text = "MIT"}
@@ -54,7 +54,7 @@ dependencies = [
 
 [project.urls]
 Homepage = "https://github.com/nittygritty-zzy/quantmini"
-Documentation = "https://github.com/nittygritty-zzy/quantmini#readme"
+Documentation = "https://quantmini.readthedocs.io"
 Repository = "https://github.com/nittygritty-zzy/quantmini"
 Issues = "https://github.com/nittygritty-zzy/quantmini/issues"
 Changelog = "https://github.com/nittygritty-zzy/quantmini/blob/main/docs/changelog/README.md"
@@ -91,6 +91,20 @@ build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src"]
+
+[tool.hatch.build.targets.sdist]
+exclude = [
+    "/.venv",
+    "/.uv",
+    "/list",
+    "/data",
+    "/logs",
+    "/mlruns",
+    "/.pytest_cache",
+    "/.mypy_cache",
+    "*.pyc",
+    "__pycache__",
+]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

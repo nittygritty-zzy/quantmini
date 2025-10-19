@@ -7,9 +7,10 @@ sys.path.insert(0, os.path.abspath('..'))
 
 # -- Project information -----------------------------------------------------
 project = 'QuantMini'
-copyright = '2024, Zheyuan Zhao'
+copyright = '2025, Zheyuan Zhao'
 author = 'Zheyuan Zhao'
-release = '0.1.0'
+release = '0.2.0'
+version = '0.2.0'
 
 # -- General configuration ---------------------------------------------------
 extensions = [
