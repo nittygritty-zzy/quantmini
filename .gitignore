@@ -32,6 +32,9 @@ catboost_info/
 config/credentials.yaml
 config/system_profile.yaml
 
+# PyPI credentials (CRITICAL - DO NOT COMMIT!)
+.pypirc
+
 # Environment variables
 .env
 .env.local
