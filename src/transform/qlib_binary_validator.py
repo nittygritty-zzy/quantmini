@@ -133,7 +133,15 @@ class QlibBinaryValidator:
                 return result
 
             with open(instruments_file) as f:
-                symbols = [line.strip() for line in f if line.strip()]
+                # Instruments file format: SYMBOL\tstart_date\tend_date
+                # Extract just the symbol (first field)
+                symbols = []
+                for line in f:
+                    line = line.strip()
+                    if line:
+                        # Split by tab and take first field (symbol)
+                        symbol = line.split('\t')[0]
+                        symbols.append(symbol)
 
             if len(symbols) == 0:
                 result['errors'] = result.get('errors', [])
