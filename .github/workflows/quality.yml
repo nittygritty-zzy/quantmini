@@ -1,0 +1,114 @@
+name: Code Quality
+
+on:
+  push:
+    branches: [ main, develop, claude/* ]
+  pull_request:
+    branches: [ main, develop ]
+
+permissions:
+  contents: read
+
+jobs:
+  lint:
+    name: Lint and Format Check
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install uv
+        run: |
+          curl -LsSf https://astral.sh/uv/install.sh | sh
+          echo "$HOME/.cargo/bin" >> $GITHUB_PATH
+
+      - name: Create virtual environment
+        run: uv venv
+
+      - name: Install ruff
+        run: |
+          source .venv/bin/activate
+          uv pip install ruff
+
+      - name: Run ruff linter
+        run: |
+          source .venv/bin/activate
+          ruff check src/ tests/ scripts/ --output-format=github
+        continue-on-error: true  # Don't fail the build on linting issues initially
+
+      - name: Run ruff formatter check
+        run: |
+          source .venv/bin/activate
+          ruff format --check src/ tests/ scripts/
+        continue-on-error: true  # Don't fail the build on formatting issues initially
+
+  type-check:
+    name: Type Checking
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install uv
+        run: |
+          curl -LsSf https://astral.sh/uv/install.sh | sh
+          echo "$HOME/.cargo/bin" >> $GITHUB_PATH
+
+      - name: Create virtual environment
+        run: uv venv
+
+      - name: Install dependencies
+        run: |
+          source .venv/bin/activate
+          uv pip install -e ".[dev]"
+          uv pip install mypy types-PyYAML types-requests
+
+      - name: Run mypy
+        run: |
+          source .venv/bin/activate
+          mypy src/ --ignore-missing-imports --no-strict-optional
+        continue-on-error: true  # Don't fail the build on type errors initially
+
+  security:
+    name: Security Scan
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install uv
+        run: |
+          curl -LsSf https://astral.sh/uv/install.sh | sh
+          echo "$HOME/.cargo/bin" >> $GITHUB_PATH
+
+      - name: Create virtual environment
+        run: uv venv
+
+      - name: Install safety
+        run: |
+          source .venv/bin/activate
+          uv pip install safety
+
+      - name: Check for known vulnerabilities
+        run: |
+          source .venv/bin/activate
+          safety check --json || echo "Security check completed with warnings"
+        continue-on-error: true
