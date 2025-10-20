@@ -3,19 +3,25 @@
 # This file IS COMMITTED to git - use relative paths or generic defaults
 
 # Data Lake Root (Medallion Architecture: Landing → Bronze → Silver → Gold)
-data_lake_root: /Volumes/sandisk/quantmini-lake
+# IMPORTANT: For production use with large datasets, override this path:
+#   1. Set DATA_LAKE_ROOT environment variable, OR
+#   2. Edit config/paths.yaml (gitignored) with your environment-specific paths, OR
+#   3. Edit config/system_profile.yaml (gitignored) with your personal paths
+# Default: Uses relative "data" directory in project root
+data_lake_root: data
 
 # Layer-specific paths
-landing_path: /Volumes/sandisk/quantmini-lake/landing
-bronze_path: /Volumes/sandisk/quantmini-lake/bronze
-silver_path: /Volumes/sandisk/quantmini-lake/silver
-gold_path: /Volumes/sandisk/quantmini-lake/gold
+# Leave empty to auto-derive from data_lake_root (recommended)
+# Or specify custom paths for each layer
+landing_path: data/landing
+bronze_path: data/bronze
+silver_path: data/silver
+gold_path: data/gold
 
 # Legacy data root (deprecated - kept for backward compatibility)
-# Default: /Volumes/sandisk/quantmini-data (external drive)
 # For your personal path: Edit config/system_profile.yaml (gitignored)
 # Or set DATA_ROOT environment variable
-data_root: /Volumes/sandisk/quantmini-data
+data_root: data
 
 pipeline:
   # Processing mode: adaptive, streaming, batch, or parallel

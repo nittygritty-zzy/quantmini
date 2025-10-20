@@ -13,7 +13,7 @@ from io import BytesIO
 from src.ingest.base_ingestor import BaseIngestor, IngestionError
 
 
-class TestIngestor(BaseIngestor):
+class MockIngestor(BaseIngestor):
     """Concrete implementation for testing"""
 
     def ingest_date(self, date, data, symbols=None):
@@ -36,7 +36,7 @@ def test_config():
 @pytest.fixture
 def test_ingestor(tmp_path, test_config):
     """Create test ingestor instance"""
-    return TestIngestor(
+    return MockIngestor(
         data_type='stocks_daily',
         output_root=tmp_path / 'parquet',
         config=test_config
@@ -182,7 +182,7 @@ def test_memory_monitor_integration(test_ingestor):
 def test_repr(test_ingestor):
     """Test string representation"""
     repr_str = repr(test_ingestor)
-    assert 'TestIngestor' in repr_str
+    assert 'MockIngestor' in repr_str
     assert 'stocks_daily' in repr_str
 
 
