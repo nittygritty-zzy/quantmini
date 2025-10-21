@@ -172,10 +172,10 @@ def enrich(data_type, start_date, end_date, incremental):
     config = ConfigLoader()
 
     click.echo(f"⚙️  Enriching {data_type} from {start_date} to {end_date}...")
-    
+
     with FeatureEngineer(
-        parquet_root=config.get_data_root() / 'parquet',
-        enriched_root=config.get_data_root() / 'enriched',
+        parquet_root=config.get_bronze_path(),
+        enriched_root=config.get_silver_path(),
         config=config
     ) as engineer:
         result = engineer.enrich_date_range(
@@ -184,10 +184,42 @@ def enrich(data_type, start_date, end_date, incremental):
             end_date=end_date,
             incremental=incremental
         )
-        
+
         click.echo(f"\n✅ Enriched {result['records_enriched']:,} records")
         click.echo(f"   Dates processed: {result['dates_processed']}")
         click.echo(f"   Features added: {result['features_added']}")
+
+        # Record metadata for silver layer (enrichment adds features to create silver layer)
+        try:
+            metadata_root = config.get_metadata_path()
+            metadata_manager = MetadataManager(metadata_root)
+
+            # Record metadata for the enrichment
+            metadata_manager.record_ingestion(
+                data_type=data_type,
+                date=end_date,
+                status='success',
+                statistics={
+                    'records_enriched': result['records_enriched'],
+                    'dates_processed': result['dates_processed'],
+                    'features_added': result['features_added'],
+                    'start_date': start_date,
+                    'end_date': end_date,
+                },
+                layer='silver'
+            )
+
+            # Update watermark
+            metadata_manager.set_watermark(
+                data_type=data_type,
+                date=end_date,
+                layer='silver'
+            )
+
+            click.echo("✓ Metadata recorded for silver layer")
+
+        except Exception as e:
+            click.echo(f"Warning: Failed to record metadata: {e}", err=True)
 
 
 @data.command()
@@ -216,8 +248,8 @@ def convert(data_type, start_date, end_date, incremental):
     click.echo(f"🔄 Converting {data_type} to Qlib binary format...")
 
     writer = QlibBinaryWriter(
-        enriched_root=config.get_data_root() / 'enriched',
-        qlib_root=config.get_data_root() / 'qlib',
+        enriched_root=config.get_silver_path(),
+        qlib_root=config.get_gold_path() / 'qlib',
         config=config
     )
 
@@ -230,6 +262,38 @@ def convert(data_type, start_date, end_date, incremental):
 
     click.echo(f"\n✅ Converted {result['symbols_converted']} symbols")
     click.echo(f"   Features: {result['features_written']}")
+
+    # Record metadata for gold layer (Qlib binary format)
+    try:
+        metadata_root = config.get_metadata_path()
+        metadata_manager = MetadataManager(metadata_root)
+
+        # Record metadata for the conversion
+        # Use a special data_type to distinguish from regular enrichment
+        metadata_manager.record_ingestion(
+            data_type=f"{data_type}_qlib",
+            date=end_date,
+            status='success',
+            statistics={
+                'symbols_converted': result['symbols_converted'],
+                'features_written': result['features_written'],
+                'start_date': start_date,
+                'end_date': end_date,
+            },
+            layer='gold'
+        )
+
+        # Update watermark
+        metadata_manager.set_watermark(
+            data_type=f"{data_type}_qlib",
+            date=end_date,
+            layer='gold'
+        )
+
+        click.echo("✓ Metadata recorded for gold layer (Qlib conversion)")
+
+    except Exception as e:
+        click.echo(f"Warning: Failed to record metadata: {e}", err=True)
     if 'elapsed_time' in result:
         click.echo(f"   Time: {result['elapsed_time']:.2f}s")
 
@@ -253,9 +317,9 @@ def query(data_type, symbols, fields, start_date, end_date, output, limit):
     click.echo(f"🔍 Querying {data_type}...")
     click.echo(f"   Symbols: {', '.join(symbols)}")
     click.echo(f"   Fields: {', '.join(fields)}")
-    
+
     engine = QueryEngine(
-        data_root=config.get_data_root() / 'enriched',
+        data_root=config.get_silver_path(),
         config=config
     )
     

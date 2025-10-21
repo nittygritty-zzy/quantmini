@@ -63,7 +63,7 @@ class CorporateActionsDownloader:
 
         Args:
             df: DataFrame to save
-            data_type: Type of data (dividends, splits, etc.)
+            data_type: Type of data (dividends, splits, ipos, ticker_events)
             date_column: Column name for date partitioning
         """
         if len(df) == 0:
@@ -113,7 +113,7 @@ class CorporateActionsDownloader:
                 (pl.col('ticker') == ticker)
             ).drop(['year', 'month'])
 
-            # Create partition directory: year=2024/month=10/ticker=AAPL.parquet
+            # Create partition directory: {data_type}/year=2024/month=10/ticker=AAPL.parquet
             partition_dir = self.output_dir / data_type / f'year={year}' / f'month={month:02d}'
             partition_dir.mkdir(parents=True, exist_ok=True)
 
@@ -124,7 +124,12 @@ class CorporateActionsDownloader:
                 existing_df = pl.read_parquet(output_file)
                 partition_df = pl.concat([existing_df, partition_df], how="diagonal")
 
-            partition_df.write_parquet(str(output_file), compression='zstd')
+            partition_df.write_parquet(
+                str(output_file),
+                compression='zstd',
+                use_pyarrow=True,
+                pyarrow_options={'use_dictionary': False}  # Disable dictionary encoding to prevent schema conflicts
+            )
             logger.info(f"Saved {len(partition_df)} records to {output_file}")
 
     async def download_dividends(
