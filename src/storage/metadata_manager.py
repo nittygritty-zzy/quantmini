@@ -57,7 +57,8 @@ class MetadataManager:
         status: str,
         statistics: Dict[str, Any],
         symbol: Optional[str] = None,
-        error: Optional[str] = None
+        error: Optional[str] = None,
+        layer: str = 'bronze'
     ):
         """
         Record ingestion result
@@ -69,6 +70,7 @@ class MetadataManager:
             statistics: Ingestion statistics
             symbol: Optional symbol (for minute data)
             error: Optional error message
+            layer: Medallion layer ('landing', 'bronze', 'silver', 'gold')
         """
         try:
             # Build metadata record
@@ -77,19 +79,20 @@ class MetadataManager:
                 'date': date,
                 'symbol': symbol,
                 'status': status,
+                'layer': layer,
                 'timestamp': datetime.now().isoformat(),
                 'statistics': statistics,
                 'error': error,
             }
 
             # Save to file
-            metadata_file = self._get_metadata_file(data_type, date, symbol)
+            metadata_file = self._get_metadata_file(data_type, date, symbol, layer)
             metadata_file.parent.mkdir(parents=True, exist_ok=True)
 
             with open(metadata_file, 'w') as f:
                 json.dump(record, f, indent=2)
 
-            logger.debug(f"Recorded ingestion: {data_type} / {date} / {status}")
+            logger.debug(f"Recorded ingestion: {layer}/{data_type} / {date} / {status}")
 
         except Exception as e:
             raise MetadataManagerError(f"Failed to record ingestion: {e}")
@@ -131,7 +134,8 @@ class MetadataManager:
         data_type: str,
         start_date: Optional[str] = None,
         end_date: Optional[str] = None,
-        status: Optional[str] = None
+        status: Optional[str] = None,
+        layer: Optional[str] = None
     ) -> List[Dict[str, Any]]:
         """
         List ingestion records with optional filtering
@@ -141,6 +145,7 @@ class MetadataManager:
             start_date: Optional start date filter
             end_date: Optional end date filter
             status: Optional status filter
+            layer: Optional layer filter ('landing', 'bronze', 'silver', 'gold')
 
         Returns:
             List of metadata records
@@ -148,28 +153,52 @@ class MetadataManager:
         try:
             records = []
 
-            metadata_dir = self.metadata_root / data_type
-            if not metadata_dir.exists():
-                return records
+            # Determine which directories to search
+            if layer:
+                search_dirs = [self.metadata_root / layer / data_type]
+            else:
+                # Search all layers for backward compatibility
+                search_dirs = []
+                for layer_name in ['landing', 'bronze', 'silver', 'gold']:
+                    layer_dir = self.metadata_root / layer_name / data_type
+                    if layer_dir.exists():
+                        search_dirs.append(layer_dir)
 
-            # Find all metadata files
-            for metadata_file in metadata_dir.rglob('*.json'):
-                try:
-                    with open(metadata_file, 'r') as f:
-                        record = json.load(f)
+                # Also check old flat structure for backward compatibility
+                old_dir = self.metadata_root / data_type
+                if old_dir.exists():
+                    search_dirs.append(old_dir)
 
-                    # Apply filters
-                    if start_date and record['date'] < start_date:
+            # Find all metadata files (exclude watermark files)
+            for metadata_dir in search_dirs:
+                if not metadata_dir.exists():
+                    continue
+
+                for metadata_file in metadata_dir.rglob('*.json'):
+                    # Skip watermark files
+                    if 'watermark' in metadata_file.name:
                         continue
-                    if end_date and record['date'] > end_date:
-                        continue
-                    if status and record['status'] != status:
-                        continue
 
-                    records.append(record)
+                    try:
+                        with open(metadata_file, 'r') as f:
+                            record = json.load(f)
 
-                except Exception as e:
-                    logger.warning(f"Failed to read {metadata_file}: {e}")
+                        # Skip if missing required fields (e.g., watermark files)
+                        if 'status' not in record or 'date' not in record:
+                            continue
+
+                        # Apply filters
+                        if start_date and record['date'] < start_date:
+                            continue
+                        if end_date and record['date'] > end_date:
+                            continue
+                        if status and record['status'] != status:
+                            continue
+
+                        records.append(record)
+
+                    except Exception as e:
+                        logger.warning(f"Failed to read {metadata_file}: {e}")
 
             # Sort by date
             records.sort(key=lambda r: (r['date'], r.get('symbol', '')))
@@ -182,7 +211,8 @@ class MetadataManager:
     def get_watermark(
         self,
         data_type: str,
-        symbol: Optional[str] = None
+        symbol: Optional[str] = None,
+        layer: str = 'bronze'
     ) -> Optional[str]:
         """
         Get watermark (latest successfully ingested date) for incremental processing
@@ -190,12 +220,13 @@ class MetadataManager:
         Args:
             data_type: Data type
             symbol: Optional symbol
+            layer: Medallion layer
 
         Returns:
             Latest date string or None
         """
         try:
-            records = self.list_ingestions(data_type, status='success')
+            records = self.list_ingestions(data_type, status='success', layer=layer)
 
             if symbol:
                 records = [r for r in records if r.get('symbol') == symbol]
@@ -215,7 +246,8 @@ class MetadataManager:
         self,
         data_type: str,
         date: str,
-        symbol: Optional[str] = None
+        symbol: Optional[str] = None,
+        layer: str = 'bronze'
     ):
         """
         Set watermark for incremental processing
@@ -223,16 +255,18 @@ class MetadataManager:
         Args:
             data_type: Data type
             date: Date string
+            layer: Medallion layer
             symbol: Optional symbol
         """
         try:
-            watermark_file = self._get_watermark_file(data_type, symbol)
+            watermark_file = self._get_watermark_file(data_type, symbol, layer)
             watermark_file.parent.mkdir(parents=True, exist_ok=True)
 
             watermark = {
                 'data_type': data_type,
                 'symbol': symbol,
                 'date': date,
+                'layer': layer,
                 'timestamp': datetime.now().isoformat(),
             }
 
@@ -286,7 +320,8 @@ class MetadataManager:
         self,
         data_type: str,
         start_date: Optional[str] = None,
-        end_date: Optional[str] = None
+        end_date: Optional[str] = None,
+        layer: Optional[str] = None
     ) -> Dict[str, Any]:
         """
         Get aggregated statistics for ingestion jobs
@@ -295,12 +330,13 @@ class MetadataManager:
             data_type: Data type
             start_date: Optional start date
             end_date: Optional end date
+            layer: Optional layer filter
 
         Returns:
             Summary statistics
         """
         try:
-            records = self.list_ingestions(data_type, start_date, end_date)
+            records = self.list_ingestions(data_type, start_date, end_date, layer=layer)
 
             if not records:
                 return {
@@ -317,9 +353,15 @@ class MetadataManager:
             failed = sum(1 for r in records if r['status'] == 'failed')
             skipped = sum(1 for r in records if r['status'] == 'skipped')
 
+            # Count skipped as successful for success rate
+            successful_count = success + skipped
+
             # Sum records processed
+            # Handle different field names: 'records', 'symbols_converted', 'records_enriched'
             total_records = sum(
-                r['statistics'].get('records', 0)
+                r['statistics'].get('records',
+                    r['statistics'].get('symbols_converted',
+                        r['statistics'].get('records_enriched', 0)))
                 for r in records
                 if r['status'] == 'success'
             )
@@ -341,7 +383,7 @@ class MetadataManager:
                 'success': success,
                 'failed': failed,
                 'skipped': skipped,
-                'success_rate': success / total_jobs if total_jobs > 0 else 0,
+                'success_rate': successful_count / total_jobs if total_jobs > 0 else 0,
                 'total_records': total_records,
                 'total_size_mb': total_size_mb,
             }
@@ -377,7 +419,8 @@ class MetadataManager:
         self,
         data_type: str,
         date: str,
-        symbol: Optional[str] = None
+        symbol: Optional[str] = None,
+        layer: str = 'bronze'
     ) -> Path:
         """
         Get metadata file path
@@ -386,11 +429,12 @@ class MetadataManager:
             data_type: Data type
             date: Date string
             symbol: Optional symbol
+            layer: Medallion layer
 
         Returns:
             Path to metadata file
         """
-        path = self.metadata_root / data_type / date[:4] / date[5:7]
+        path = self.metadata_root / layer / data_type / date[:4] / date[5:7]
 
         if symbol:
             path = path / f"{date}_{symbol}.json"
@@ -402,7 +446,8 @@ class MetadataManager:
     def _get_watermark_file(
         self,
         data_type: str,
-        symbol: Optional[str] = None
+        symbol: Optional[str] = None,
+        layer: str = 'bronze'
     ) -> Path:
         """
         Get watermark file path
@@ -410,11 +455,12 @@ class MetadataManager:
         Args:
             data_type: Data type
             symbol: Optional symbol
+            layer: Medallion layer
 
         Returns:
             Path to watermark file
         """
-        path = self.metadata_root / data_type
+        path = self.metadata_root / layer / data_type
 
         if symbol:
             path = path / f"watermark_{symbol}.json"
@@ -536,22 +582,49 @@ def main():
         print("✅ MetadataManager initialized")
         print(f"   Root: {metadata_root}")
 
-        # List statistics for all data types
-        for data_type in ['stocks_daily', 'stocks_minute', 'options_daily', 'options_minute']:
-            stats = manager.get_statistics_summary(data_type)
+        # List statistics for all data types organized by layer
+        layers = ['landing', 'bronze', 'silver', 'gold']
+        data_types_by_layer = {
+            'bronze': ['stocks_daily', 'stocks_minute', 'options_daily', 'options_minute',
+                      'fundamentals', 'corporate_actions', 'news', 'short_data'],
+            'silver': ['stocks_daily', 'stocks_minute', 'options_daily', 'options_minute',
+                      'fundamentals', 'corporate_actions', 'financial_ratios'],
+            'gold': ['stocks_daily_qlib']
+        }
 
-            if stats['total_jobs'] > 0:
-                print(f"\n📊 {data_type}:")
-                print(f"   Total jobs: {stats['total_jobs']}")
-                print(f"   Success: {stats['success']} ({stats['success_rate']:.1%})")
-                print(f"   Failed: {stats['failed']}")
-                print(f"   Records: {stats['total_records']:,}")
-                print(f"   Size: {stats['total_size_mb']:.1f} MB")
+        for layer in layers:
+            layer_has_data = False
+            layer_output = []
 
-                # Get watermark
-                watermark = manager.get_watermark(data_type)
-                if watermark:
-                    print(f"   Watermark: {watermark}")
+            # Get data types for this layer
+            data_types = data_types_by_layer.get(layer, [])
+
+            for data_type in data_types:
+                stats = manager.get_statistics_summary(data_type, layer=layer)
+
+                if stats['total_jobs'] > 0:
+                    if not layer_has_data:
+                        layer_output.append(f"\n{'='*80}")
+                        layer_output.append(f"📦 {layer.upper()} LAYER")
+                        layer_output.append('='*80)
+                        layer_has_data = True
+
+                    layer_output.append(f"\n📊 {data_type}:")
+                    layer_output.append(f"   Total jobs: {stats['total_jobs']}")
+                    layer_output.append(f"   Success: {stats['success']}, Skipped: {stats['skipped']}, Failed: {stats['failed']}")
+                    layer_output.append(f"   Success rate: {stats['success_rate']:.1%}")
+                    layer_output.append(f"   Records: {stats['total_records']:,}")
+                    layer_output.append(f"   Size: {stats['total_size_mb']:.1f} MB")
+
+                    # Get watermark
+                    watermark = manager.get_watermark(data_type, layer=layer)
+                    if watermark:
+                        layer_output.append(f"   Watermark: {watermark}")
+
+            # Print layer output if it has data
+            if layer_has_data:
+                for line in layer_output:
+                    print(line)
 
     except Exception as e:
         print(f"❌ Error: {e}")

@@ -12,10 +12,12 @@ Provides commands to download:
 import click
 import asyncio
 from pathlib import Path
-from datetime import date, timedelta
+from datetime import date, timedelta, datetime as dt
 import logging
 
 from ...core.config_loader import ConfigLoader
+from src.utils.paths import get_quantlake_root
+from ...storage.metadata_manager import MetadataManager
 from ...download import (
     PolygonRESTClient,
     ReferenceDataDownloader,
@@ -36,6 +38,44 @@ from ...download import (
 )
 
 logger = logging.getLogger(__name__)
+
+
+def _record_polygon_metadata(data_type: str, records: int, status: str = 'success', error: str = None):
+    """
+    Record metadata for Polygon API downloads
+
+    Args:
+        data_type: Type of data (fundamentals, corporate_actions, news, short_data)
+        records: Number of records downloaded
+        status: Status ('success', 'failed')
+        error: Optional error message
+    """
+    try:
+        config = ConfigLoader()
+        metadata_root = config.get_metadata_path()
+        metadata_manager = MetadataManager(metadata_root)
+
+        # Use current date as the "date" for API downloads
+        today = dt.now().strftime('%Y-%m-%d')
+
+        metadata_manager.record_ingestion(
+            data_type=data_type,
+            date=today,
+            status=status,
+            statistics={
+                'records': records,
+                'download_timestamp': dt.now().isoformat()
+            },
+            error=error
+        )
+
+        # Update watermark
+        if status == 'success':
+            metadata_manager.set_watermark(data_type=data_type, date=today)
+
+    except Exception as e:
+        # Don't let metadata errors block the download
+        logger.warning(f"Failed to record metadata: {e}")
 
 
 @click.group()
@@ -63,9 +103,13 @@ def _get_api_key(credentials: dict) -> str:
 @polygon.command()
 @click.option('--asset-class', type=str, help='Filter by asset class (stocks, options, crypto, fx, indices)')
 @click.option('--locale', type=str, help='Filter by locale (us, global)')
-@click.option('--output-dir', type=Path, default='data/reference', help='Output directory')
+@click.option('--output-dir', type=Path, default=None, help='Output directory')
 def ticker_types(asset_class, locale, output_dir):
     """Download ticker types"""
+    # Use centralized path configuration if output_dir not specified
+    if not output_dir:
+        output_dir = get_quantlake_root() / 'reference'
+
     async def run():
         config = ConfigLoader()
         credentials = config.get_credentials('polygon')
@@ -93,9 +137,13 @@ def ticker_types(asset_class, locale, output_dir):
 
 @polygon.command()
 @click.argument('tickers', nargs=-1, required=True)
-@click.option('--output-dir', type=Path, default='data/partitioned_screener', help='Output directory (partitioned structure)')
+@click.option('--output-dir', type=Path, default=None, help='Output directory (partitioned structure)')
 def related_tickers(tickers, output_dir):
     """Download related tickers for one or more tickers in partitioned structure"""
+    # Use centralized path configuration if output_dir not specified
+    if not output_dir:
+        output_dir = get_quantlake_root() / 'reference'
+
     async def run():
         config = ConfigLoader()
         credentials = config.get_credentials('polygon')
@@ -137,9 +185,13 @@ def related_tickers(tickers, output_dir):
 @click.option('--start-date', type=str, help='Start date (YYYY-MM-DD)')
 @click.option('--end-date', type=str, help='End-date (YYYY-MM-DD)')
 @click.option('--include-ipos', is_flag=True, help='Include IPO data')
-@click.option('--output-dir', type=Path, default='data/partitioned_screener', help='Output directory (partitioned structure)')
+@click.option('--output-dir', type=Path, default=None, help='Output directory (partitioned structure)')
 def corporate_actions(ticker, start_date, end_date, include_ipos, output_dir):
     """Download corporate actions (dividends, splits, IPOs) in partitioned structure"""
+    # Use centralized path configuration if output_dir not specified
+    if not output_dir:
+        output_dir = get_quantlake_root() / 'corporate_actions'
+
     async def run():
         config = ConfigLoader()
         credentials = config.get_credentials('polygon')
@@ -175,6 +227,12 @@ def corporate_actions(ticker, start_date, end_date, include_ipos, output_dir):
             if include_ipos:
                 click.echo(f"   IPOs: {len(data['ipos'])} records")
 
+            # Record metadata
+            total_records = len(data['dividends']) + len(data['splits'])
+            if include_ipos:
+                total_records += len(data['ipos'])
+            _record_polygon_metadata('corporate_actions', total_records, 'success')
+
             # Show statistics
             stats = client.get_statistics()
             click.echo(f"\n📊 Statistics:")
@@ -188,9 +246,13 @@ def corporate_actions(ticker, start_date, end_date, include_ipos, output_dir):
 
 @polygon.command()
 @click.argument('tickers', nargs=-1, required=True)
-@click.option('--output-dir', type=Path, default='data/partitioned_screener', help='Output directory (partitioned structure)')
+@click.option('--output-dir', type=Path, default=None, help='Output directory (partitioned structure)')
 def ticker_events(tickers, output_dir):
     """Download ticker events (symbol changes, rebranding) in partitioned structure"""
+    # Use centralized path configuration if output_dir not specified
+    if not output_dir:
+        output_dir = get_quantlake_root() / 'bronze' / 'corporate_actions'
+
     async def run():
         config = ConfigLoader()
         credentials = config.get_credentials('polygon')
@@ -230,9 +292,34 @@ def ticker_events(tickers, output_dir):
 @polygon.command()
 @click.argument('tickers', nargs=-1, required=True)
 @click.option('--timeframe', type=click.Choice(['annual', 'quarterly']), default='quarterly', help='Reporting period')
-@click.option('--output-dir', type=Path, default='data/partitioned_screener', help='Output directory (partitioned structure)')
-def fundamentals(tickers, timeframe, output_dir):
-    """Download fundamentals (balance sheets, income statements, cash flow) in partitioned structure"""
+@click.option('--filing-date-gte', type=str, default=None, help='Filing date >= YYYY-MM-DD (default: last 180 days)')
+@click.option('--filing-date-lt', type=str, default=None, help='Filing date < YYYY-MM-DD (default: today)')
+@click.option('--output-dir', type=Path, default=None, help='Output directory (partitioned structure)')
+def fundamentals(tickers, timeframe, filing_date_gte, filing_date_lt, output_dir):
+    """Download fundamentals (balance sheets, income statements, cash flow) in partitioned structure
+
+    OPTIMIZED: Now supports date filtering on API side for much faster downloads!
+
+    For daily updates, use --filing-date-gte to get only recent filings.
+    Defaults to last 180 days (6 months = 2 quarters) if no dates specified.
+
+    Examples:
+      quantmini polygon fundamentals AAPL MSFT --filing-date-gte 2024-01-01
+      quantmini polygon fundamentals AAPL --filing-date-gte 2024-01-01 --filing-date-lt 2024-12-31
+    """
+    from datetime import datetime, timedelta
+
+    # Use centralized path configuration if output_dir not specified
+    if not output_dir:
+        output_dir = get_quantlake_root() / 'fundamentals'
+
+    # Default to last 180 days (6 months = 2 quarters) if no dates specified
+    if not filing_date_gte and not filing_date_lt:
+        today = datetime.now().date()
+        default_start = today - timedelta(days=180)
+        filing_date_gte = str(default_start)
+        click.echo(f"ℹ️  No date range specified, defaulting to last 180 days ({default_start} to {today})")
+
     async def run():
         config = ConfigLoader()
         credentials = config.get_credentials('polygon')
@@ -252,15 +339,26 @@ def fundamentals(tickers, timeframe, output_dir):
                 output_dir,
                 use_partitioned_structure=True
             )
-            click.echo(f"📥 Downloading {timeframe} fundamentals for {len(tickers)} tickers...")
+
+            date_info = f" from {filing_date_gte or 'beginning'} to {filing_date_lt or 'today'}"
+            click.echo(f"📥 Downloading {timeframe} fundamentals for {len(tickers)} tickers{date_info}...")
             click.echo(f"📂 Saving to partitioned structure: {output_dir}/")
 
-            data = await downloader.download_financials_batch(list(tickers), timeframe)
+            data = await downloader.download_financials_batch(
+                list(tickers),
+                timeframe,
+                filing_date_gte=filing_date_gte,
+                filing_date_lt=filing_date_lt
+            )
 
             click.echo(f"✅ Downloaded fundamentals:")
             click.echo(f"   Balance sheets: {data['balance_sheets']} records")
             click.echo(f"   Cash flow: {data['cash_flow']} records")
             click.echo(f"   Income statements: {data['income_statements']} records")
+
+            # Record metadata
+            total_records = data['balance_sheets'] + data['cash_flow'] + data['income_statements']
+            _record_polygon_metadata('fundamentals', total_records, 'success')
 
             # Show statistics
             stats = client.get_statistics()
@@ -275,11 +373,17 @@ def fundamentals(tickers, timeframe, output_dir):
 
 @polygon.command()
 @click.argument('tickers', nargs=-1, required=True)
-@click.option('--input-dir', type=Path, default='data/partitioned_screener', help='Input directory with fundamentals data')
-@click.option('--output-dir', type=Path, default='data/partitioned_screener', help='Output directory (partitioned structure)')
+@click.option('--input-dir', type=Path, default=None, help='Input directory with fundamentals data')
+@click.option('--output-dir', type=Path, default=None, help='Output directory (partitioned structure)')
 @click.option('--include-growth', is_flag=True, default=True, help='Include growth rate calculations')
 def financial_ratios(tickers, input_dir, output_dir, include_growth):
     """Calculate financial ratios from fundamentals data in partitioned structure"""
+    # Use centralized path configuration if paths not specified
+    if not input_dir:
+        input_dir = get_quantlake_root() / 'fundamentals'
+    if not output_dir:
+        output_dir = get_quantlake_root() / 'fundamentals'
+
     async def run():
         downloader = FinancialRatiosDownloader(
             input_dir,
@@ -314,9 +418,13 @@ def financial_ratios(tickers, input_dir, output_dir, include_growth):
 @click.option('--start-date', type=str, help='Start date (YYYY-MM-DD)')
 @click.option('--end-date', type=str, help='End date (YYYY-MM-DD)')
 @click.option('--days', type=int, default=90, help='Number of days to download (default: 90)')
-@click.option('--output-dir', type=Path, default='data/economy', help='Output directory')
+@click.option('--output-dir', type=Path, default=None, help='Output directory')
 def economy(start_date, end_date, days, output_dir):
     """Download economy data (treasury yields, inflation, expectations)"""
+    # Use centralized path configuration if output_dir not specified
+    if not output_dir:
+        output_dir = get_quantlake_root() / 'economy'
+
     async def run():
         config = ConfigLoader()
         credentials = config.get_credentials('polygon')
@@ -361,9 +469,13 @@ def economy(start_date, end_date, days, output_dir):
 
 @polygon.command()
 @click.option('--date', type=str, help='Date for yield curve (YYYY-MM-DD, default: today)')
-@click.option('--output-dir', type=Path, default='data/economy', help='Output directory')
+@click.option('--output-dir', type=Path, default=None, help='Output directory')
 def yield_curve(date_str, output_dir):
     """Download full treasury yield curve for a specific date"""
+    # Use centralized path configuration if output_dir not specified
+    if not output_dir:
+        output_dir = get_quantlake_root() / 'economy'
+
     async def run():
         config = ConfigLoader()
         credentials = config.get_credentials('polygon')
@@ -407,9 +519,13 @@ def yield_curve(date_str, output_dir):
 
 @polygon.command()
 @click.argument('tickers', nargs=-1, required=True)
-@click.option('--output-dir', type=Path, default='data/partitioned_screener', help='Output directory (partitioned structure)')
+@click.option('--output-dir', type=Path, default=None, help='Output directory (partitioned structure)')
 def short_interest(tickers, output_dir):
     """Download short interest data for one or more tickers in partitioned structure"""
+    # Use centralized path configuration if output_dir not specified
+    if not output_dir:
+        output_dir = get_quantlake_root() / 'bronze' / 'fundamentals'
+
     async def run():
         config = ConfigLoader()
         credentials = config.get_credentials('polygon')
@@ -454,9 +570,13 @@ def short_interest(tickers, output_dir):
 
 @polygon.command()
 @click.argument('tickers', nargs=-1, required=True)
-@click.option('--output-dir', type=Path, default='data/partitioned_screener', help='Output directory (partitioned structure)')
+@click.option('--output-dir', type=Path, default=None, help='Output directory (partitioned structure)')
 def short_volume(tickers, output_dir):
     """Download short volume data for one or more tickers in partitioned structure"""
+    # Use centralized path configuration if output_dir not specified
+    if not output_dir:
+        output_dir = get_quantlake_root() / 'bronze' / 'fundamentals'
+
     async def run():
         config = ConfigLoader()
         credentials = config.get_credentials('polygon')
@@ -501,9 +621,33 @@ def short_volume(tickers, output_dir):
 
 @polygon.command()
 @click.argument('tickers', nargs=-1, required=True)
-@click.option('--output-dir', type=Path, default='data/partitioned_screener', help='Output directory (partitioned structure)')
-def short_data(tickers, output_dir):
-    """Download both short interest and short volume for one or more tickers in partitioned structure"""
+@click.option('--settlement-date-gte', type=str, default=None, help='Short interest: settlement date >= YYYY-MM-DD (default: last 30 days)')
+@click.option('--settlement-date-lte', type=str, default=None, help='Short interest: settlement date <= YYYY-MM-DD (default: today)')
+@click.option('--date-gte', type=str, default=None, help='Short volume: date >= YYYY-MM-DD (default: last 30 days)')
+@click.option('--date-lte', type=str, default=None, help='Short volume: date <= YYYY-MM-DD (default: today)')
+@click.option('--output-dir', type=Path, default=None, help='Output directory (partitioned structure)')
+def short_data(tickers, settlement_date_gte, settlement_date_lte, date_gte, date_lte, output_dir):
+    """Download both short interest and short volume for one or more tickers in partitioned structure
+
+    UPDATED: Now uses date filtering on API side for much faster downloads!
+
+    For daily updates, use --settlement-date-gte and --date-gte to get only recent data.
+    Example: --settlement-date-gte 2025-10-01 --date-gte 2025-10-01
+    """
+    from datetime import datetime, timedelta
+
+    # Use centralized path configuration if output_dir not specified
+    if not output_dir:
+        output_dir = get_quantlake_root() / 'bronze' / 'fundamentals'
+
+    # Default to last 30 days if no dates specified
+    if not settlement_date_gte and not settlement_date_lte and not date_gte and not date_lte:
+        today = datetime.now().date()
+        default_start = today - timedelta(days=30)
+        settlement_date_gte = str(default_start)
+        date_gte = str(default_start)
+        click.echo(f"ℹ️  No date range specified, defaulting to last 30 days ({default_start} to {today})")
+
     async def run():
         config = ConfigLoader()
         credentials = config.get_credentials('polygon')
@@ -524,13 +668,25 @@ def short_data(tickers, output_dir):
                 use_partitioned_structure=True
             )
             click.echo(f"📂 Saving to partitioned structure: {output_dir}/")
-            click.echo(f"📥 Downloading short data for {len(tickers)} tickers...")
 
-            data = await downloader.download_short_data_batch(list(tickers))
+            date_info = f" from {settlement_date_gte or date_gte or 'beginning'} to {settlement_date_lte or date_lte or 'today'}"
+            click.echo(f"📥 Downloading short data for {len(tickers)} tickers{date_info}...")
+
+            data = await downloader.download_short_data_batch(
+                tickers=list(tickers),
+                settlement_date_gte=settlement_date_gte,
+                settlement_date_lte=settlement_date_lte,
+                date_gte=date_gte,
+                date_lte=date_lte
+            )
 
             click.echo(f"✅ Downloaded short data:")
             click.echo(f"   Short interest: {len(data['short_interest'])} records")
             click.echo(f"   Short volume: {len(data['short_volume'])} records")
+
+            # Record metadata
+            total_records = len(data['short_interest']) + len(data['short_volume'])
+            _record_polygon_metadata('short_data', total_records, 'success')
 
             # Show statistics
             stats = client.get_statistics()
@@ -551,9 +707,13 @@ def short_data(tickers, output_dir):
 @click.option('--timespan', type=click.Choice(['minute', 'hour', 'day', 'week', 'month']), default='day', help='Size of time window')
 @click.option('--from-date', type=str, help='Start date (YYYY-MM-DD)')
 @click.option('--to-date', type=str, help='End date (YYYY-MM-DD)')
-@click.option('--output-dir', type=Path, default='data/bars', help='Output directory')
+@click.option('--output-dir', type=Path, default=None, help='Output directory')
 def bars(tickers, multiplier, timespan, from_date, to_date, output_dir):
     """Download aggregate bars (OHLCV) for one or more tickers"""
+    # Use centralized path configuration if output_dir not specified
+    if not output_dir:
+        output_dir = get_quantlake_root() / 'bars'
+
     async def run():
         config = ConfigLoader()
         credentials = config.get_credentials('polygon')
@@ -578,9 +738,13 @@ def bars(tickers, multiplier, timespan, from_date, to_date, output_dir):
 
 @polygon.command()
 @click.argument('tickers', nargs=-1, required=True)
-@click.option('--output-dir', type=Path, default='data/snapshots', help='Output directory')
+@click.option('--output-dir', type=Path, default=None, help='Output directory')
 def snapshots(tickers, output_dir):
     """Download real-time snapshots for one or more tickers"""
+    # Use centralized path configuration if output_dir not specified
+    if not output_dir:
+        output_dir = get_quantlake_root() / 'snapshots'
+
     async def run():
         config = ConfigLoader()
         credentials = config.get_credentials('polygon')
@@ -600,9 +764,13 @@ def snapshots(tickers, output_dir):
 
 
 @polygon.command()
-@click.option('--output-dir', type=Path, default='data/market_status', help='Output directory')
+@click.option('--output-dir', type=Path, default=None, help='Output directory')
 def market_status(output_dir):
     """Download market status, holidays, and metadata"""
+    # Use centralized path configuration if output_dir not specified
+    if not output_dir:
+        output_dir = get_quantlake_root() / 'market_status'
+
     async def run():
         config = ConfigLoader()
         credentials = config.get_credentials('polygon')
@@ -625,9 +793,13 @@ def market_status(output_dir):
 @click.argument('ticker', required=True)
 @click.option('--indicator', type=click.Choice(['sma', 'ema', 'macd', 'rsi', 'all']), default='all', help='Indicator type')
 @click.option('--window', type=int, default=50, help='Window size (for SMA/EMA/RSI)')
-@click.option('--output-dir', type=Path, default='data/indicators', help='Output directory')
+@click.option('--output-dir', type=Path, default=None, help='Output directory')
 def indicators(ticker, indicator, window, output_dir):
     """Download technical indicators for a ticker"""
+    # Use centralized path configuration if output_dir not specified
+    if not output_dir:
+        output_dir = get_quantlake_root() / 'indicators'
+
     async def run():
         config = ConfigLoader()
         credentials = config.get_credentials('polygon')
@@ -662,9 +834,13 @@ def indicators(ticker, indicator, window, output_dir):
 @polygon.command()
 @click.option('--underlying', type=str, help='Underlying ticker')
 @click.option('--expiration', type=str, help='Expiration date (YYYY-MM-DD)')
-@click.option('--output-dir', type=Path, default='data/options', help='Output directory')
+@click.option('--output-dir', type=Path, default=None, help='Output directory')
 def options(underlying, expiration, output_dir):
     """Download options contracts and chains"""
+    # Use centralized path configuration if output_dir not specified
+    if not output_dir:
+        output_dir = get_quantlake_root() / 'options'
+
     async def run():
         config = ConfigLoader()
         credentials = config.get_credentials('polygon')
@@ -692,7 +868,7 @@ def options(underlying, expiration, output_dir):
 @click.option('--end-date', type=str, help='End date for news (YYYY-MM-DD)')
 @click.option('--days', type=int, default=30, help='Number of days to download (default: 30, used if dates not specified)')
 @click.option('--limit', type=int, default=1000, help='Number of news articles per ticker (max 1000)')
-@click.option('--output-dir', type=Path, default='data/partitioned_screener', help='Output directory (partitioned structure)')
+@click.option('--output-dir', type=Path, default=None, help='Output directory (partitioned structure)')
 def news(tickers, start_date, end_date, days, limit, output_dir):
     """Download news articles for one or more tickers in partitioned structure
 
@@ -701,6 +877,10 @@ def news(tickers, start_date, end_date, days, limit, output_dir):
       quantmini polygon news AAPL --start-date 2024-01-01 --end-date 2024-12-31
       quantmini polygon news --days 7  # All tickers from the last 7 days
     """
+    # Use centralized path configuration if output_dir not specified
+    if not output_dir:
+        output_dir = get_quantlake_root() / 'news'
+
     async def run():
         config = ConfigLoader()
         credentials = config.get_credentials('polygon')
@@ -726,6 +906,7 @@ def news(tickers, start_date, end_date, days, limit, output_dir):
             click.echo(f"📂 Saving to partitioned structure: {output_dir}/news/")
             click.echo(f"📅 Date range: {start_date} to {end_date}")
 
+            total_articles = 0
             if tickers:
                 # Download for specific tickers
                 click.echo(f"📥 Downloading news for {len(tickers)} tickers...")
@@ -738,7 +919,8 @@ def news(tickers, start_date, end_date, days, limit, output_dir):
                         published_utc_lte=end_date,
                         limit=limit
                     )
-                    click.echo(f"✅ Downloaded {len(df)} news articles")
+                    total_articles = len(df)
+                    click.echo(f"✅ Downloaded {total_articles} news articles")
                 else:
                     # Batch download
                     result = await downloader.download_news_batch(
@@ -747,7 +929,8 @@ def news(tickers, start_date, end_date, days, limit, output_dir):
                         published_utc_lte=end_date,
                         limit=limit
                     )
-                    click.echo(f"✅ Downloaded {result['total_articles']} total news articles")
+                    total_articles = result['total_articles']
+                    click.echo(f"✅ Downloaded {total_articles} total news articles")
             else:
                 # Download all news (no ticker filter)
                 click.echo(f"📥 Downloading all news articles...")
@@ -757,7 +940,11 @@ def news(tickers, start_date, end_date, days, limit, output_dir):
                     published_utc_lte=end_date,
                     limit=limit
                 )
-                click.echo(f"✅ Downloaded {len(df)} news articles")
+                total_articles = len(df)
+                click.echo(f"✅ Downloaded {total_articles} news articles")
+
+            # Record metadata
+            _record_polygon_metadata('news', total_articles, 'success')
 
             # Show statistics
             stats = client.get_statistics()
