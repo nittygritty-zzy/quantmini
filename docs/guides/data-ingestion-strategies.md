@@ -509,7 +509,7 @@ uv run python scripts/validation/validate_duckdb_access.py
 **Solution**:
 ```bash
 # Check disk usage
-df -h /Volumes/sandisk/quantmini-data
+df -h /Volumes/sandisk/quantlake
 
 # Clean old data
 uv run python scripts/maintenance/cleanup_old_data.py \
@@ -517,7 +517,7 @@ uv run python scripts/maintenance/cleanup_old_data.py \
 
 # Move to external drive
 rsync -av --progress \
-  /Volumes/sandisk/quantmini-data/ \
+  /Volumes/sandisk/quantlake/ \
   /Volumes/backup/quantmini-archive/
 ```
 

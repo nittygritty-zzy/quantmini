@@ -65,7 +65,7 @@ Edit `config/system_profile.yaml` (gitignored - safe for personal paths):
 cp config/system_profile.yaml.example config/system_profile.yaml
 
 # Edit system_profile.yaml
-data_root: /Volumes/ExternalSSD/quantmini-data/data
+data_root: /Volumes/ExternalSSD/quantlake/data
 ```
 
 **Pros**:
@@ -148,13 +148,13 @@ Store data on a fast external drive:
 
 ```bash
 # macOS
-DATA_ROOT=/Volumes/ExternalSSD/quantmini-data/data
+DATA_ROOT=/Volumes/ExternalSSD/quantlake/data
 
 # Linux
-DATA_ROOT=/mnt/storage/quantmini-data/data
+DATA_ROOT=/mnt/storage/quantlake/data
 
 # Windows (WSL)
-DATA_ROOT=/mnt/d/quantmini-data/data
+DATA_ROOT=/mnt/d/quantlake/data
 ```
 
 **Pros**: More storage capacity, doesn't fill system drive
@@ -169,7 +169,7 @@ Store data on NAS or cloud storage:
 DATA_ROOT=/mnt/nas/quantmini/data
 
 # Cloud (mounted via rclone, etc.)
-DATA_ROOT=/mnt/s3/quantmini-data/data
+DATA_ROOT=/mnt/s3/quantlake/data
 ```
 
 **Pros**: Accessible from multiple machines, backup built-in
