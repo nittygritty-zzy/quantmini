@@ -1,0 +1,186 @@
+{
+  "columns": [
+    {
+      "name": "ticker",
+      "dtype": "VARCHAR"
+    },
+    {
+      "name": "filing_date",
+      "dtype": "DATE"
+    },
+    {
+      "name": "fiscal_year",
+      "dtype": "INT"
+    },
+    {
+      "name": "fiscal_period",
+      "dtype": "VARCHAR"
+    },
+    {
+      "name": "fiscal_quarter",
+      "dtype": "VARCHAR"
+    },
+    {
+      "name": "bs_acceptance_datetime",
+      "dtype": "VARCHAR"
+    },
+    {
+      "name": "bs_cik",
+      "dtype": "VARCHAR"
+    },
+    {
+      "name": "bs_company_name",
+      "dtype": "VARCHAR"
+    },
+    {
+      "name": "bs_downloaded_at",
+      "dtype": "DATE"
+    },
+    {
+      "name": "bs_end_date",
+      "dtype": "VARCHAR"
+    },
+    {
+      "name": "bs_financials",
+      "dtype": "VARCHAR"
+    },
+    {
+      "name": "bs_sic",
+      "dtype": "VARCHAR"
+    },
+    {
+      "name": "bs_source_filing_file_url",
+      "dtype": "VARCHAR"
+    },
+    {
+      "name": "bs_source_filing_url",
+      "dtype": "VARCHAR"
+    },
+    {
+      "name": "bs_start_date",
+      "dtype": "VARCHAR"
+    },
+    {
+      "name": "bs_tickers",
+      "dtype": "VARCHAR"
+    },
+    {
+      "name": "bs_timeframe",
+      "dtype": "VARCHAR"
+    },
+    {
+      "name": "is_acceptance_datetime",
+      "dtype": "VARCHAR"
+    },
+    {
+      "name": "is_cik",
+      "dtype": "VARCHAR"
+    },
+    {
+      "name": "is_company_name",
+      "dtype": "VARCHAR"
+    },
+    {
+      "name": "is_downloaded_at",
+      "dtype": "DATE"
+    },
+    {
+      "name": "is_end_date",
+      "dtype": "VARCHAR"
+    },
+    {
+      "name": "is_financials",
+      "dtype": "VARCHAR"
+    },
+    {
+      "name": "is_sic",
+      "dtype": "VARCHAR"
+    },
+    {
+      "name": "is_source_filing_file_url",
+      "dtype": "VARCHAR"
+    },
+    {
+      "name": "is_source_filing_url",
+      "dtype": "VARCHAR"
+    },
+    {
+      "name": "is_start_date",
+      "dtype": "VARCHAR"
+    },
+    {
+      "name": "is_tickers",
+      "dtype": "VARCHAR"
+    },
+    {
+      "name": "is_timeframe",
+      "dtype": "VARCHAR"
+    },
+    {
+      "name": "cf_acceptance_datetime",
+      "dtype": "VARCHAR"
+    },
+    {
+      "name": "cf_cik",
+      "dtype": "VARCHAR"
+    },
+    {
+      "name": "cf_company_name",
+      "dtype": "VARCHAR"
+    },
+    {
+      "name": "cf_downloaded_at",
+      "dtype": "DATE"
+    },
+    {
+      "name": "cf_end_date",
+      "dtype": "VARCHAR"
+    },
+    {
+      "name": "cf_financials",
+      "dtype": "VARCHAR"
+    },
+    {
+      "name": "cf_sic",
+      "dtype": "VARCHAR"
+    },
+    {
+      "name": "cf_source_filing_file_url",
+      "dtype": "VARCHAR"
+    },
+    {
+      "name": "cf_source_filing_url",
+      "dtype": "VARCHAR"
+    },
+    {
+      "name": "cf_start_date",
+      "dtype": "VARCHAR"
+    },
+    {
+      "name": "cf_tickers",
+      "dtype": "VARCHAR"
+    },
+    {
+      "name": "cf_timeframe",
+      "dtype": "VARCHAR"
+    },
+    {
+      "name": "has_complete_data",
+      "dtype": "BOOLEAN"
+    },
+    {
+      "name": "data_quality_score",
+      "dtype": "DECIMAL(5,2)"
+    },
+    {
+      "name": "processed_at",
+      "dtype": "TIMESTAMP"
+    },
+    {
+      "name": "bronze_files_merged",
+      "dtype": "INT"
+    }
+  ],
+  "total_columns": 45,
+  "generated_at": "2025-10-20T21:30:00.909026"
+}

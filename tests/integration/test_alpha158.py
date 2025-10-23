@@ -22,7 +22,7 @@ class TestAlpha158Features:
     @pytest.fixture(autouse=True)
     def setup_qlib(self):
         """Initialize Qlib before each test"""
-        qlib_path = Path("/Volumes/sandisk/quantmini-data/data/qlib/stocks_daily")
+        qlib_path = Path("/Volumes/sandisk/quantlake/data/qlib/stocks_daily")
         if not qlib_path.exists():
             pytest.skip(f"Qlib data not found at {qlib_path}")
 
@@ -262,7 +262,7 @@ class TestAlpha158Comparison:
     @pytest.fixture(autouse=True)
     def setup_qlib(self):
         """Initialize Qlib before each test"""
-        qlib_path = Path("/Volumes/sandisk/quantmini-data/data/qlib/stocks_daily")
+        qlib_path = Path("/Volumes/sandisk/quantlake/data/qlib/stocks_daily")
         if not qlib_path.exists():
             pytest.skip(f"Qlib data not found at {qlib_path}")
 

@@ -20,7 +20,6 @@ Usage:
 """
 
 import argparse
-import asyncio
 import sys
 import logging
 import gzip
@@ -38,6 +37,7 @@ from src.storage.parquet_manager import ParquetManager
 from src.storage.metadata_manager import MetadataManager
 from src.core.system_profiler import SystemProfiler
 from src.utils.market_calendar import get_default_calendar
+from src.utils.paths import get_quantlake_root
 
 # Setup logging
 logging.basicConfig(
@@ -94,7 +94,7 @@ def get_landing_files(
     return sorted(files)
 
 
-async def process_landing_to_bronze(
+def process_landing_to_bronze(
     data_type: str,
     start_date: str,
     end_date: str,
@@ -117,9 +117,10 @@ async def process_landing_to_bronze(
     logger.info(f"Date range: {start_date} to {end_date}")
 
     # Get paths
+    # Use configured data_lake_root if available, otherwise fall back to environment-based path
     data_lake_root = config.get('data_lake_root')
     if not data_lake_root:
-        raise ValueError("data_lake_root not configured")
+        data_lake_root = get_quantlake_root()
 
     landing_root = Path(data_lake_root) / 'landing'
     bronze_root = config.get_bronze_path()
@@ -129,7 +130,6 @@ async def process_landing_to_bronze(
     logger.info(f"Bronze: {bronze_root}")
 
     # Initialize managers
-    parquet_manager = ParquetManager(bronze_root, data_type)
     metadata_manager = MetadataManager(metadata_root)
 
     # Get processing mode
@@ -140,9 +140,17 @@ async def process_landing_to_bronze(
 
     # Select ingestor based on mode
     if processing_mode == 'batch':
-        ingestor = PolarsIngestor(parquet_manager=parquet_manager)
+        ingestor = PolarsIngestor(
+            data_type=data_type,
+            output_root=bronze_root,
+            config=config.config
+        )
     else:
-        ingestor = StreamingIngestor(parquet_manager=parquet_manager)
+        ingestor = StreamingIngestor(
+            data_type=data_type,
+            output_root=bronze_root,
+            config=config.config
+        )
 
     # Get landing files
     landing_files = get_landing_files(landing_root, data_type, start_date, end_date)
@@ -160,9 +168,8 @@ async def process_landing_to_bronze(
     # Get watermark if incremental
     last_watermark = None
     if incremental:
-        watermark = metadata_manager.get_watermark(data_type)
-        if watermark:
-            last_watermark = watermark.get('last_date')
+        last_watermark = metadata_manager.get_watermark(data_type)
+        if last_watermark:
             logger.info(f"Last watermark: {last_watermark}")
 
     # Process each file
@@ -186,31 +193,67 @@ async def process_landing_to_bronze(
                 csv_data = f.read()
 
             # Ingest to bronze
-            result = await ingestor.ingest_data(
-                data=BytesIO(csv_data),
-                data_type=data_type,
-                date=file_date
+            result = ingestor.ingest_date(
+                date=file_date,
+                data=BytesIO(csv_data)
             )
 
-            if result and result.get('status') == 'success':
+            if result and result.get('status') in ['success', 'skipped']:
                 files_processed += 1
-                total_rows += result.get('rows_written', 0)
+                rows_written = result.get('records', 0)
+                total_rows += rows_written
+
+                # Record ingestion metadata
+                metadata_manager.record_ingestion(
+                    data_type=data_type,
+                    date=file_date,
+                    status=result.get('status'),
+                    statistics={
+                        'records': rows_written,
+                        'file_size_mb': result.get('file_size_mb', 0),
+                        'processing_time_sec': result.get('processing_time_sec', 0),
+                        'reason': result.get('reason', '')
+                    }
+                )
 
                 # Update watermark
-                metadata_manager.update_watermark(
+                metadata_manager.set_watermark(
                     data_type=data_type,
-                    last_date=file_date,
-                    rows_processed=result.get('rows_written', 0)
+                    date=file_date
                 )
 
-                logger.info(
-                    f"  ✓ Ingested {result.get('rows_written', 0):,} rows to bronze"
-                )
+                if result.get('status') == 'skipped':
+                    logger.info(f"  ⊙ Skipped {file_date} ({result.get('reason', 'unknown')})")
+                else:
+                    logger.info(f"  ✓ Ingested {rows_written:,} rows to bronze")
             else:
                 logger.error(f"  ✗ Failed to ingest {file_date}")
 
+                # Record failure
+                metadata_manager.record_ingestion(
+                    data_type=data_type,
+                    date=file_date,
+                    status='failed',
+                    statistics={},
+                    error='Ingestion returned non-success status'
+                )
+
         except Exception as e:
             logger.error(f"Error processing {landing_file}: {e}")
+
+            # Record error
+            try:
+                file_date = landing_file.stem.replace('.csv', '')
+                metadata_manager.record_ingestion(
+                    data_type=data_type,
+                    date=file_date,
+                    status='failed',
+                    statistics={},
+                    error=str(e)
+                )
+            except:
+                pass  # Don't let metadata errors block the pipeline
+
             continue
 
     # Summary
@@ -233,7 +276,7 @@ async def process_landing_to_bronze(
     return summary
 
 
-async def main():
+def main():
     parser = argparse.ArgumentParser(
         description='Process landing files to bronze layer',
         formatter_class=argparse.RawDescriptionHelpFormatter,
@@ -280,7 +323,7 @@ async def main():
     results = {}
     for data_type in data_types:
         try:
-            result = await process_landing_to_bronze(
+            result = process_landing_to_bronze(
                 data_type,
                 args.start_date,
                 args.end_date,
@@ -316,4 +359,4 @@ async def main():
 
 
 if __name__ == '__main__':
-    asyncio.run(main())
+    main()

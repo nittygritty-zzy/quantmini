@@ -274,7 +274,9 @@ def phase_validation(test_dir: Path):
 async def main():
     """Run complete pipeline"""
 
-    TEST_DIR = Path('/Users/zheyuanzhao/workspace/quantmini/test_pipeline')
+    # Use project-relative path instead of absolute path
+    PROJECT_ROOT = Path(__file__).parent.parent.parent
+    TEST_DIR = PROJECT_ROOT / 'test_pipeline'
 
     logger.info("="*80)
     logger.info("COMPLETE MEDALLION ARCHITECTURE PIPELINE TEST")

@@ -8,7 +8,7 @@ import logging
 import sys
 from pathlib import Path
 
-from .commands import data, pipeline, config_cmd, validate, schema, api, polygon
+from .commands import data, pipeline, config_cmd, validate, schema, api, polygon, transform
 
 
 # Configure logging to show INFO and above to stderr with simple format
@@ -40,6 +40,7 @@ cli.add_command(validate.validate)
 cli.add_command(schema.schema)
 cli.add_command(api.api)
 cli.add_command(polygon.polygon)
+cli.add_command(transform.transform)
 
 
 if __name__ == '__main__':

@@ -51,8 +51,8 @@ def main():
     )
     parser.add_argument(
         "--output-dir",
-        default="data/parquet",
-        help="Output directory for parquet files (default: data/parquet)"
+        default=None,
+        help="Output directory for parquet files (default: QUANTLAKE_ROOT/bronze/delisted)"
     )
     parser.add_argument(
         "--limit",
@@ -67,6 +67,11 @@ def main():
     )
 
     args = parser.parse_args()
+
+    # Set default output directory using ConfigLoader if not provided
+    if args.output_dir is None:
+        config = ConfigLoader()
+        args.output_dir = str(config.get_bronze_path() / 'delisted')
 
     logger.info("=" * 80)
     logger.info("DELISTED STOCKS DOWNLOADER")

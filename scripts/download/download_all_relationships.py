@@ -127,9 +127,11 @@ async def main():
 
     # Get credentials
     credentials = config.get_credentials('polygon')
-    if not credentials or 'api_key' not in credentials:
+    if not credentials or 'api' not in credentials or 'key' not in credentials['api']:
         logger.error("Polygon API key not found in config/credentials.yaml")
         sys.exit(1)
+
+    api_key = credentials['api']['key']
 
     # Get bronze path
     bronze_path = config.get_bronze_path()
@@ -175,7 +177,7 @@ async def main():
 
     # Initialize client and downloader
     async with PolygonRESTClient(
-        api_key=credentials['api_key'],
+        api_key=api_key,
         max_concurrent=100,  # High parallelism for speed
         max_connections=200
     ) as client:

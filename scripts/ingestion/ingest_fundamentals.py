@@ -69,6 +69,7 @@ from src.download.financial_ratios_downloader import FinancialRatiosDownloader
 from src.download.corporate_actions import CorporateActionsDownloader
 from src.download.reference_data import ReferenceDataDownloader
 from src.core.config_loader import ConfigLoader
+from src.utils.paths import get_quantlake_root
 
 # Configure logging
 logging.basicConfig(
@@ -808,7 +809,7 @@ async def main_async(args):
     config = ConfigLoader()
     credentials = config.get_credentials('polygon')
     api_key = credentials['api']['key']
-    output_dir = Path('data/partitioned_screener')
+    output_dir = get_quantlake_root() / 'fundamentals'
 
     # Initialize progress tracker
     progress_file = Path('data/download_progress.json')

@@ -32,6 +32,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 from src.core.config_loader import ConfigLoader
 from src.download.s3_catalog import S3Catalog
 from src.download.async_downloader import AsyncS3Downloader
+from src.utils.paths import get_quantlake_root
 
 # Setup logging
 logging.basicConfig(
@@ -64,9 +65,10 @@ async def download_to_landing(
     logger.info(f"Date range: {start_date} to {end_date}")
 
     # Get landing path (organized by source)
+    # Use configured data_lake_root if available, otherwise fall back to environment-based path
     data_lake_root = config.get('data_lake_root')
     if not data_lake_root:
-        raise ValueError("data_lake_root not configured")
+        data_lake_root = get_quantlake_root()
 
     landing_path = Path(data_lake_root) / 'landing' / 'polygon-s3' / data_type
     landing_path.mkdir(parents=True, exist_ok=True)
@@ -249,7 +251,10 @@ async def main():
 
     logger.info(f"\n{'─'*70}")
     logger.info(f"TOTAL: {total_files} files, {total_gb:.2f} GB")
-    logger.info(f"Landing: {config.get('data_lake_root')}/landing/polygon-s3/")
+
+    # Get landing root for display (with fallback)
+    landing_root = config.get('data_lake_root') or get_quantlake_root()
+    logger.info(f"Landing: {landing_root}/landing/polygon-s3/")
 
 
 if __name__ == '__main__':

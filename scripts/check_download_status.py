@@ -16,6 +16,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 import polars as pl
 from src.utils.data_loader import DataLoader
+from src.utils.paths import get_quantlake_root
 
 
 def main():
@@ -24,7 +25,9 @@ def main():
     print('=' * 80)
 
     # Load universe tickers
-    universe_file = Path('data/universe_tickers.txt')
+    # Use project-relative path
+    project_root = Path(__file__).parent.parent
+    universe_file = project_root / 'data' / 'universe_tickers.txt'
     if not universe_file.exists():
         print(f'❌ Universe file not found: {universe_file}')
         return 1
@@ -36,9 +39,11 @@ def main():
 
     # Get tickers with fundamentals
     bs_tickers = set()
-    for file in Path('data/partitioned_screener/balance_sheets').rglob('ticker=*.parquet'):
-        ticker = file.stem.replace('ticker=', '')
-        bs_tickers.add(ticker)
+    balance_sheets_path = get_quantlake_root() / 'fundamentals' / 'balance_sheets'
+    if balance_sheets_path.exists():
+        for file in balance_sheets_path.rglob('ticker=*.parquet'):
+            ticker = file.stem.replace('ticker=', '')
+            bs_tickers.add(ticker)
 
     # Get tickers with ratios
     loader = DataLoader()

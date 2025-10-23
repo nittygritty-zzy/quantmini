@@ -122,7 +122,7 @@ class CorporateActionsDownloader:
             # If file exists, append to it (diagonal concat to handle schema differences)
             if output_file.exists():
                 existing_df = pl.read_parquet(output_file)
-                partition_df = pl.concat([existing_df, partition_df], how="diagonal")
+                partition_df = pl.concat([existing_df, partition_df], how="diagonal_relaxed")
 
             partition_df.write_parquet(
                 str(output_file),
@@ -420,8 +420,8 @@ class CorporateActionsDownloader:
             logger.warning("No ticker events found for any ticker")
             return pl.DataFrame()
 
-        # Combine all DataFrames
-        combined_df = pl.concat(dfs, how="diagonal")
+        # Combine all DataFrames with relaxed schema alignment to handle Null vs String mismatches
+        combined_df = pl.concat(dfs, how="diagonal_relaxed")
         logger.info(f"Downloaded {len(combined_df)} total ticker event records")
 
         return combined_df

@@ -224,6 +224,8 @@ class FundamentalsDownloader:
         cik: Optional[str] = None,
         company_name: Optional[str] = None,
         filing_date: Optional[str] = None,
+        filing_date_gte: Optional[str] = None,
+        filing_date_lt: Optional[str] = None,
         period_of_report_date: Optional[str] = None,
         timeframe: Optional[str] = None,
         include_sources: bool = False,
@@ -232,11 +234,15 @@ class FundamentalsDownloader:
         """
         Download balance sheets
 
+        UPDATED: Now supports date range filtering for faster downloads!
+
         Args:
             ticker: Ticker symbol
             cik: CIK number
             company_name: Company name
-            filing_date: Filing date (YYYY-MM-DD)
+            filing_date: Exact filing date (YYYY-MM-DD)
+            filing_date_gte: Filing date >= (YYYY-MM-DD)
+            filing_date_lt: Filing date < (YYYY-MM-DD)
             period_of_report_date: Period of report date
             timeframe: annual or quarterly
             include_sources: Include source data
@@ -256,6 +262,10 @@ class FundamentalsDownloader:
             params['company_name'] = company_name
         if filing_date:
             params['filing_date'] = filing_date
+        if filing_date_gte:
+            params['filing_date.gte'] = filing_date_gte
+        if filing_date_lt:
+            params['filing_date.lt'] = filing_date_lt
         if period_of_report_date:
             params['period_of_report_date'] = period_of_report_date
         if timeframe:
@@ -291,6 +301,8 @@ class FundamentalsDownloader:
         ticker: Optional[str] = None,
         cik: Optional[str] = None,
         filing_date: Optional[str] = None,
+        filing_date_gte: Optional[str] = None,
+        filing_date_lt: Optional[str] = None,
         period_of_report_date: Optional[str] = None,
         timeframe: Optional[str] = None,
         limit: int = 100
@@ -298,10 +310,14 @@ class FundamentalsDownloader:
         """
         Download cash flow statements
 
+        UPDATED: Now supports date range filtering!
+
         Args:
             ticker: Ticker symbol
             cik: CIK number
-            filing_date: Filing date
+            filing_date: Exact filing date (YYYY-MM-DD)
+            filing_date_gte: Filing date >= (YYYY-MM-DD)
+            filing_date_lt: Filing date < (YYYY-MM-DD)
             period_of_report_date: Period of report date
             timeframe: annual or quarterly
             limit: Results per page
@@ -318,6 +334,10 @@ class FundamentalsDownloader:
             params['cik'] = cik
         if filing_date:
             params['filing_date'] = filing_date
+        if filing_date_gte:
+            params['filing_date.gte'] = filing_date_gte
+        if filing_date_lt:
+            params['filing_date.lt'] = filing_date_lt
         if period_of_report_date:
             params['period_of_report_date'] = period_of_report_date
         if timeframe:
@@ -351,6 +371,8 @@ class FundamentalsDownloader:
         ticker: Optional[str] = None,
         cik: Optional[str] = None,
         filing_date: Optional[str] = None,
+        filing_date_gte: Optional[str] = None,
+        filing_date_lt: Optional[str] = None,
         period_of_report_date: Optional[str] = None,
         timeframe: Optional[str] = None,
         limit: int = 100
@@ -358,10 +380,14 @@ class FundamentalsDownloader:
         """
         Download income statements
 
+        UPDATED: Now supports date range filtering!
+
         Args:
             ticker: Ticker symbol
             cik: CIK number
-            filing_date: Filing date
+            filing_date: Exact filing date (YYYY-MM-DD)
+            filing_date_gte: Filing date >= (YYYY-MM-DD)
+            filing_date_lt: Filing date < (YYYY-MM-DD)
             period_of_report_date: Period of report date
             timeframe: annual or quarterly
             limit: Results per page
@@ -378,6 +404,10 @@ class FundamentalsDownloader:
             params['cik'] = cik
         if filing_date:
             params['filing_date'] = filing_date
+        if filing_date_gte:
+            params['filing_date.gte'] = filing_date_gte
+        if filing_date_lt:
+            params['filing_date.lt'] = filing_date_lt
         if period_of_report_date:
             params['period_of_report_date'] = period_of_report_date
         if timeframe:
@@ -410,14 +440,20 @@ class FundamentalsDownloader:
         self,
         ticker: str,
         timeframe: str = 'quarterly',
+        filing_date_gte: Optional[str] = None,
+        filing_date_lt: Optional[str] = None,
         limit: int = 100
     ) -> Dict[str, pl.DataFrame]:
         """
         Download all financial statements in parallel
 
+        UPDATED: Now supports date filtering!
+
         Args:
             ticker: Ticker symbol
             timeframe: annual or quarterly
+            filing_date_gte: Filing date >= (YYYY-MM-DD)
+            filing_date_lt: Filing date < (YYYY-MM-DD)
             limit: Results per page
 
         Returns:
@@ -425,11 +461,29 @@ class FundamentalsDownloader:
         """
         logger.info(f"Downloading all financials for {ticker} ({timeframe})")
 
-        # Download all in parallel
+        # Download all in parallel with date filtering
         results = await asyncio.gather(
-            self.download_balance_sheets(ticker=ticker, timeframe=timeframe, limit=limit),
-            self.download_cash_flow_statements(ticker=ticker, timeframe=timeframe, limit=limit),
-            self.download_income_statements(ticker=ticker, timeframe=timeframe, limit=limit),
+            self.download_balance_sheets(
+                ticker=ticker,
+                timeframe=timeframe,
+                filing_date_gte=filing_date_gte,
+                filing_date_lt=filing_date_lt,
+                limit=limit
+            ),
+            self.download_cash_flow_statements(
+                ticker=ticker,
+                timeframe=timeframe,
+                filing_date_gte=filing_date_gte,
+                filing_date_lt=filing_date_lt,
+                limit=limit
+            ),
+            self.download_income_statements(
+                ticker=ticker,
+                timeframe=timeframe,
+                filing_date_gte=filing_date_gte,
+                filing_date_lt=filing_date_lt,
+                limit=limit
+            ),
             return_exceptions=True
         )
 
@@ -456,7 +510,9 @@ class FundamentalsDownloader:
     async def download_financials_batch(
         self,
         tickers: List[str],
-        timeframe: str = 'quarterly'
+        timeframe: str = 'quarterly',
+        filing_date_gte: Optional[str] = None,
+        filing_date_lt: Optional[str] = None
     ) -> Dict[str, int]:
         """
         Download financials for multiple tickers in parallel
@@ -464,18 +520,31 @@ class FundamentalsDownloader:
         Note: Files are saved separately per ticker to preserve nested struct schemas.
         This avoids the issue of combining structs with different field counts.
 
+        UPDATED: Now supports date filtering on API side for faster downloads!
+
         Args:
             tickers: List of ticker symbols
             timeframe: annual or quarterly
+            filing_date_gte: Filing date >= (YYYY-MM-DD)
+            filing_date_lt: Filing date < (YYYY-MM-DD)
 
         Returns:
             Dictionary with counts for each statement type
         """
-        logger.info(f"Downloading financials for {len(tickers)} tickers in parallel")
+        date_info = ""
+        if filing_date_gte or filing_date_lt:
+            date_info = f" (filing date: {filing_date_gte or 'beginning'} to {filing_date_lt or 'today'})"
+
+        logger.info(f"Downloading financials for {len(tickers)} tickers in parallel{date_info}")
 
         # Download all tickers in parallel (files are saved automatically per ticker)
         tasks = [
-            self.download_all_financials(ticker, timeframe)
+            self.download_all_financials(
+                ticker,
+                timeframe,
+                filing_date_gte=filing_date_gte,
+                filing_date_lt=filing_date_lt
+            )
             for ticker in tickers
         ]
         results = await asyncio.gather(*tasks, return_exceptions=True)
@@ -547,156 +616,235 @@ class FundamentalsDownloader:
 
     async def download_short_interest(
         self,
-        ticker: str,
+        ticker: Optional[str] = None,
+        settlement_date: Optional[str] = None,
+        settlement_date_gte: Optional[str] = None,
+        settlement_date_lte: Optional[str] = None,
         limit: int = 100
     ) -> pl.DataFrame:
         """
-        Download short interest data for a ticker
+        Download short interest data
+
+        IMPORTANT: API supports date filtering to avoid downloading full history!
 
         Args:
-            ticker: Ticker symbol
+            ticker: Ticker symbol to filter for (None = all tickers)
+            settlement_date: Specific settlement date (YYYY-MM-DD)
+            settlement_date_gte: Settlement date greater than or equal (YYYY-MM-DD)
+            settlement_date_lte: Settlement date less than or equal (YYYY-MM-DD)
             limit: Results per page
 
         Returns:
             Polars DataFrame with short interest data
         """
-        logger.info(f"Downloading short interest for {ticker}")
+        date_filter = ""
+        if settlement_date:
+            date_filter = f" for date {settlement_date}"
+        elif settlement_date_gte or settlement_date_lte:
+            date_filter = f" for date range {settlement_date_gte or 'beginning'} to {settlement_date_lte or 'latest'}"
+
+        logger.info(f"Downloading short interest{f' for {ticker}' if ticker else ''}{date_filter}")
 
         params = {
-            'ticker': ticker.upper(),
             'limit': limit
         }
 
-        # Fetch all pages
+        # Add date filters if specified
+        if ticker:
+            params['ticker'] = ticker.upper()
+        if settlement_date:
+            params['settlement_date'] = settlement_date
+        if settlement_date_gte:
+            params['settlement_date.gte'] = settlement_date_gte
+        if settlement_date_lte:
+            params['settlement_date.lte'] = settlement_date_lte
+
+        # Fetch all pages (with date/ticker filtering on API side)
         results = await self.client.paginate_all(
             '/stocks/v1/short-interest',
             params
         )
 
         if not results:
-            logger.warning(f"No short interest found for {ticker}")
+            logger.warning("No short interest data found")
             return pl.DataFrame()
 
         # Convert to DataFrame
         df = pl.DataFrame(results)
+        logger.info(f"Downloaded {len(df)} short interest records")
+
+        # Add metadata
         df = df.with_columns([
-            pl.lit(ticker.upper()).alias('ticker'),
             pl.lit(datetime.now()).alias('downloaded_at')
         ])
 
-        logger.info(f"Downloaded {len(df)} short interest records for {ticker}")
-
         # Save to parquet
-        if self.use_partitioned_structure:
-            self._save_partitioned_short_data(df, 'short_interest', 'settlement_date')
-        else:
-            output_file = self.output_dir / f"short_interest_{ticker.upper()}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.parquet"
-            df.write_parquet(output_file, compression='zstd')
-            logger.info(f"Saved to {output_file}")
+        if len(df) > 0:
+            if self.use_partitioned_structure:
+                self._save_partitioned_short_data(df, 'short_interest', 'settlement_date')
+            else:
+                ticker_str = ticker.upper() if ticker else 'all'
+                output_file = self.output_dir / f"short_interest_{ticker_str}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.parquet"
+                df.write_parquet(output_file, compression='zstd')
+                logger.info(f"Saved to {output_file}")
 
         return df
 
     async def download_short_volume(
         self,
-        ticker: str,
+        ticker: Optional[str] = None,
+        date: Optional[str] = None,
+        date_gte: Optional[str] = None,
+        date_lte: Optional[str] = None,
         limit: int = 100
     ) -> pl.DataFrame:
         """
-        Download short volume data for a ticker
+        Download short volume data
+
+        IMPORTANT: API supports date filtering to avoid downloading full history!
 
         Args:
-            ticker: Ticker symbol
+            ticker: Ticker symbol to filter for (None = all tickers)
+            date: Specific date (YYYY-MM-DD)
+            date_gte: Date greater than or equal (YYYY-MM-DD)
+            date_lte: Date less than or equal (YYYY-MM-DD)
             limit: Results per page
 
         Returns:
             Polars DataFrame with short volume data
         """
-        logger.info(f"Downloading short volume for {ticker}")
+        date_filter = ""
+        if date:
+            date_filter = f" for date {date}"
+        elif date_gte or date_lte:
+            date_filter = f" for date range {date_gte or 'beginning'} to {date_lte or 'latest'}"
+
+        logger.info(f"Downloading short volume{f' for {ticker}' if ticker else ''}{date_filter}")
 
         params = {
-            'ticker': ticker.upper(),
             'limit': limit
         }
 
-        # Fetch all pages
+        # Add filters if specified
+        if ticker:
+            params['ticker'] = ticker.upper()
+        if date:
+            params['date'] = date
+        if date_gte:
+            params['date.gte'] = date_gte
+        if date_lte:
+            params['date.lte'] = date_lte
+
+        # Fetch all pages (with date/ticker filtering on API side)
         results = await self.client.paginate_all(
             '/stocks/v1/short-volume',
             params
         )
 
         if not results:
-            logger.warning(f"No short volume found for {ticker}")
+            logger.warning("No short volume data found")
             return pl.DataFrame()
 
         # Convert to DataFrame
         df = pl.DataFrame(results)
+        logger.info(f"Downloaded {len(df)} short volume records")
+
+        # Add metadata
         df = df.with_columns([
-            pl.lit(ticker.upper()).alias('ticker'),
             pl.lit(datetime.now()).alias('downloaded_at')
         ])
 
-        logger.info(f"Downloaded {len(df)} short volume records for {ticker}")
-
         # Save to parquet
-        if self.use_partitioned_structure:
-            self._save_partitioned_short_data(df, 'short_volume', 'date')
-        else:
-            output_file = self.output_dir / f"short_volume_{ticker.upper()}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.parquet"
-            df.write_parquet(output_file, compression='zstd')
-            logger.info(f"Saved to {output_file}")
+        if len(df) > 0:
+            if self.use_partitioned_structure:
+                self._save_partitioned_short_data(df, 'short_volume', 'date')
+            else:
+                ticker_str = ticker.upper() if ticker else 'all'
+                output_file = self.output_dir / f"short_volume_{ticker_str}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.parquet"
+                df.write_parquet(output_file, compression='zstd')
+                logger.info(f"Saved to {output_file}")
 
         return df
 
     async def download_short_data_batch(
         self,
-        tickers: List[str],
+        tickers: Optional[List[str]] = None,
+        settlement_date_gte: Optional[str] = None,
+        settlement_date_lte: Optional[str] = None,
+        date_gte: Optional[str] = None,
+        date_lte: Optional[str] = None,
         limit: int = 100
     ) -> Dict[str, pl.DataFrame]:
         """
-        Download short interest and short volume for multiple tickers in parallel
+        Download short interest and short volume data (optimized for batch downloads)
+
+        UPDATED: Now supports date filtering on API side for faster downloads!
 
         Args:
-            tickers: List of ticker symbols
+            tickers: List of ticker symbols to filter for (None = all tickers)
+            settlement_date_gte: Short interest settlement date >= (YYYY-MM-DD)
+            settlement_date_lte: Short interest settlement date <= (YYYY-MM-DD)
+            date_gte: Short volume date >= (YYYY-MM-DD)
+            date_lte: Short volume date <= (YYYY-MM-DD)
             limit: Results per page
 
         Returns:
             Dictionary with 'short_interest' and 'short_volume' DataFrames
         """
-        logger.info(f"Downloading short data for {len(tickers)} tickers in parallel")
+        logger.info(f"Downloading short data{f' for {len(tickers)} tickers' if tickers else ' (all tickers)'}")
 
-        # Download all in parallel
-        tasks = []
-        for ticker in tickers:
-            tasks.append(self.download_short_interest(ticker, limit))
-            tasks.append(self.download_short_volume(ticker, limit))
+        # Download both datasets with date filtering
+        short_interest_task = self.download_short_interest(
+            ticker=None,
+            settlement_date_gte=settlement_date_gte,
+            settlement_date_lte=settlement_date_lte,
+            limit=limit
+        )
+        short_volume_task = self.download_short_volume(
+            ticker=None,
+            date_gte=date_gte,
+            date_lte=date_lte,
+            limit=limit
+        )
 
-        results = await asyncio.gather(*tasks, return_exceptions=True)
+        short_interest_df, short_volume_df = await asyncio.gather(
+            short_interest_task,
+            short_volume_task,
+            return_exceptions=True
+        )
 
-        # Separate short interest and short volume results
-        short_interest_dfs = []
-        short_volume_dfs = []
+        # Handle exceptions
+        if isinstance(short_interest_df, Exception):
+            logger.error(f"Failed to download short interest: {short_interest_df}")
+            short_interest_df = pl.DataFrame()
 
-        for i, result in enumerate(results):
-            if isinstance(result, Exception):
-                ticker_idx = i // 2
-                data_type = 'short_interest' if i % 2 == 0 else 'short_volume'
-                logger.error(f"Failed to download {data_type} for {tickers[ticker_idx]}: {result}")
-                continue
+        if isinstance(short_volume_df, Exception):
+            logger.error(f"Failed to download short volume: {short_volume_df}")
+            short_volume_df = pl.DataFrame()
 
-            if len(result) > 0:
-                if i % 2 == 0:  # Short interest
-                    short_interest_dfs.append(result)
-                else:  # Short volume
-                    short_volume_dfs.append(result)
+        # Filter by tickers if specified
+        if tickers and len(tickers) > 0:
+            ticker_upper = [t.upper() for t in tickers]
 
-        # Combine results (use diagonal concat to handle schema differences)
+            if len(short_interest_df) > 0 and 'ticker' in short_interest_df.columns:
+                short_interest_df = short_interest_df.filter(
+                    pl.col('ticker').is_in(ticker_upper)
+                )
+                logger.info(f"Filtered to {len(short_interest_df)} short interest records for {len(tickers)} tickers")
+
+            if len(short_volume_df) > 0 and 'ticker' in short_volume_df.columns:
+                short_volume_df = short_volume_df.filter(
+                    pl.col('ticker').is_in(ticker_upper)
+                )
+                logger.info(f"Filtered to {len(short_volume_df)} short volume records for {len(tickers)} tickers")
+
         combined = {
-            'short_interest': pl.concat(short_interest_dfs, how="diagonal") if short_interest_dfs else pl.DataFrame(),
-            'short_volume': pl.concat(short_volume_dfs, how="diagonal") if short_volume_dfs else pl.DataFrame()
+            'short_interest': short_interest_df,
+            'short_volume': short_volume_df
         }
 
         logger.info(
-            f"Downloaded short data for {len(tickers)} tickers: "
+            f"Downloaded short data: "
             f"{len(combined['short_interest'])} short interest records, "
             f"{len(combined['short_volume'])} short volume records"
         )

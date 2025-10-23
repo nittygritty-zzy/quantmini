@@ -25,6 +25,7 @@ project_root = Path(__file__).parent.parent
 sys.path.insert(0, str(project_root))
 
 from src.core.config_loader import ConfigLoader
+from src.utils.paths import get_quantlake_root
 
 # Import the TickerMetadataDownloader class from batch script
 import importlib.util
@@ -68,17 +69,22 @@ async def main():
     parser.add_argument(
         '--output',
         type=Path,
-        default=Path('data/reference/ticker_metadata.parquet'),
-        help='Output file path (default: data/reference/ticker_metadata.parquet)'
+        default=None,
+        help='Output file path (default: QUANTLAKE_ROOT/bronze/reference/ticker_metadata.parquet)'
     )
     parser.add_argument(
         '--fundamentals-dir',
         type=Path,
-        default=Path('data/partitioned_screener'),
-        help='Fundamentals directory for status computation (default: data/partitioned_screener)'
+        default=None,
+        help='Fundamentals directory for status computation (default: QUANTLAKE_ROOT/fundamentals)'
     )
 
     args = parser.parse_args()
+
+    # Set defaults using ConfigLoader if not provided
+    if args.output is None:
+        config = ConfigLoader()
+        args.output = config.get_bronze_path() / 'reference' / 'ticker_metadata.parquet'
 
     print("=" * 80)
     print("TICKER METADATA DOWNLOAD")

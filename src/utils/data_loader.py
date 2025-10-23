@@ -1,5 +1,5 @@
 """
-Data Loader - Single entry point for loading all partitioned screener tables
+Data Loader - Single entry point for loading all partitioned data tables
 
 Provides a unified interface to load:
 - Fundamentals (balance_sheets, income_statements, cash_flow)
@@ -11,13 +11,15 @@ Provides a unified interface to load:
 - Any other partitioned data
 
 All data is stored in Hive-style partitioned structure:
-data/partitioned_screener/{table_name}/year=YYYY/month=MM/ticker=SYMBOL.parquet
+{quantlake_root}/{table_name}/year=YYYY/month=MM/ticker=SYMBOL.parquet
 """
 
 import polars as pl
 from pathlib import Path
 from typing import List, Optional, Dict, Union
 from datetime import date, datetime
+
+from .paths import get_quantlake_root
 import logging
 
 logger = logging.getLogger(__name__)
@@ -25,7 +27,7 @@ logger = logging.getLogger(__name__)
 
 class DataLoader:
     """
-    Unified data loader for all partitioned screener tables
+    Unified data loader for all quantlake tables
 
     Usage:
         loader = DataLoader()
@@ -45,20 +47,22 @@ class DataLoader:
         tables = loader.list_tables()
     """
 
-    def __init__(self, base_dir: Union[str, Path] = 'data/partitioned_screener'):
+    def __init__(self, base_dir: Union[str, Path] = None):
         """
         Initialize data loader
 
         Args:
-            base_dir: Base directory containing partitioned tables
+            base_dir: Base directory containing partitioned tables (defaults to QUANTLAKE_ROOT)
         """
+        if base_dir is None:
+            base_dir = get_quantlake_root()
         self.base_dir = Path(base_dir)
         if not self.base_dir.exists():
             logger.warning(f"Base directory does not exist: {self.base_dir}")
 
     def list_tables(self) -> List[str]:
         """
-        List all available tables in the partitioned screener
+        List all available tables in the quantlake
 
         Returns:
             List of table names
@@ -419,7 +423,7 @@ def load_table(
     tickers: Optional[List[str]] = None,
     start_date: Optional[Union[str, date, datetime]] = None,
     end_date: Optional[Union[str, date, datetime]] = None,
-    base_dir: Union[str, Path] = 'data/partitioned_screener'
+    base_dir: Union[str, Path] = None
 ) -> pl.DataFrame:
     """
     Convenience function to quickly load a table
@@ -429,14 +433,14 @@ def load_table(
         tickers: Optional list of tickers
         start_date: Optional start date
         end_date: Optional end date
-        base_dir: Base directory
+        base_dir: Base directory (defaults to QUANTLAKE_ROOT)
 
     Returns:
         Polars DataFrame
 
     Example:
         # Quick load balance sheets for AAPL
-        bs = load_table('balance_sheets', tickers=['AAPL'])
+        bs = load_table('fundamentals/balance_sheets', tickers=['AAPL'])
     """
     loader = DataLoader(base_dir)
     return loader.load(table_name, tickers=tickers, start_date=start_date, end_date=end_date)
