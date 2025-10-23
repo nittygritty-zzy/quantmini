@@ -18,6 +18,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from src.core.config_loader import ConfigLoader
 from src.download import PolygonRESTClient, NewsDownloader
+from src.utils.paths import get_quantlake_root
 
 logging.basicConfig(
     level=logging.INFO,
@@ -69,7 +70,7 @@ async def main():
         # Create downloader
         downloader = NewsDownloader(
             client=client,
-            output_dir=Path('data/partitioned_screener'),
+            output_dir=get_quantlake_root() / 'bronze' / 'news',
             use_partitioned_structure=True
         )
 
