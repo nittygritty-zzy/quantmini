@@ -1,6 +1,6 @@
 # QuantMini Project Memory
 
-**Last Updated**: October 18, 2025
+**Last Updated**: October 21, 2025
 **Project**: QuantMini - High-Performance Financial Data Pipeline
 **Architecture**: Medallion Architecture (Bronze → Silver → Gold)
 
@@ -43,23 +43,47 @@ landing/              bronze/{type}/      silver/{type}/        gold/qlib/
 
 ---
 
+## Pipeline Entry Points
+
+**IMPORTANT**: The project has ONLY two entry point scripts for all data operations:
+
+1. **`scripts/daily_update_parallel.sh`** - Daily/incremental updates
+   - Processes recent data (default: yesterday, configurable with `--days-back`)
+   - Runs all layers in parallel for maximum performance
+   - Use for: daily automation, backfilling recent data
+
+2. **`scripts/historical_data_load.sh`** - Historical data downloads
+   - Downloads large historical datasets (multi-year)
+   - Optimized for bulk downloads with aggressive parallelization
+   - Use for: initial setup, downloading historical fundamentals/short data
+
+**All other scripts are internal components** called by these two entry points. Do not run individual scripts directly unless debugging.
+
+---
+
 ## Critical Technical Details
 
 ### Data Storage
 
-**Primary Data Root**: `/Volumes/sandisk/quantmini-lake/`
+**Primary Data Root**: `/Volumes/990EVOPLUS/quantlake/` (External SSD)
+**Config File**: `config/paths.yaml` (ONLY source of truth for all paths)
+**Legacy Path**: `/Volumes/sandisk/quantmini-lake/` (deprecated)
 - Configured in `config/pipeline_config.yaml`
 - Must use external drive (500GB+ required)
 
 **Directory Structure**:
 ```
-/Volumes/sandisk/quantmini-lake/
+/Volumes/990EVOPLUS/quantlake/
 ├── landing/           # Raw API responses (ephemeral)
-├── bronze/            # Validated Parquet (~770GB excluding minute data)
-│   ├── stocks_daily/
-│   ├── options_daily/
-│   ├── news/
-│   └── fundamentals/
+├── bronze/            # Validated Parquet (~100GB + minute data)
+│   ├── stocks_daily/      # Daily OHLCV data
+│   ├── stocks_minute/     # Minute OHLCV data (34GB, partitioned)
+│   ├── options_daily/     # Daily options aggregates
+│   ├── options_minute/    # Minute options data (17GB, partitioned)
+│   ├── news/              # News articles (12GB, 739K files, 10 years)
+│   ├── fundamentals/      # Financial statements, ratios
+│   ├── corporate_actions/ # Dividends, splits, IPOs
+│   └── reference_data/    # Tickers, relationships
 ├── silver/            # Feature-enriched Parquet
 │   ├── stocks_daily/  # + Alpha158 features
 │   └── options_daily/
@@ -97,9 +121,17 @@ bronze/news/news/year=2025/month=09/ticker=AAPL.parquet
 - `polygon_rest_client.py` - Base HTTP/2 async client
 - `news.py` - News articles downloader (8+ years available)
 - `bars.py` - OHLCV data downloader
-- `fundamentals.py` - Income statements, balance sheets, cash flow
-- `corporate_actions.py` - Splits, dividends, ticker changes
+- `fundamentals.py` - Income statements, balance sheets, cash flow, short data
+- `corporate_actions.py` - Dividends, splits, IPOs, ticker changes
 - `reference_data.py` - Ticker metadata, relationships
+
+**Polygon API Endpoints Covered:**
+1. **Dividends** - `/v3/reference/dividends` - Cash dividends, payment dates
+2. **Stock Splits** - `/v3/reference/splits` - Forward and reverse splits
+3. **IPOs** - `/vX/reference/ipos` - Initial public offerings
+4. **Ticker Events** - `/vX/reference/tickers/{id}/events` - Symbol changes, rebranding
+5. **Short Interest** - `/stocks/v1/short-interest` - Bi-weekly short interest (2 year max)
+6. **Short Volume** - `/stocks/v1/short-volume` - Daily short volume (all history)
 
 **API Optimizations**:
 - HTTP/2 multiplexing (100+ concurrent requests)
@@ -175,6 +207,29 @@ uv run python scripts/download/download_news_1year.py --start-date 2017-04-10
 uv run python scripts/download/download_fundamentals.py \
   --tickers-file tickers_cs.txt \
   --include-short-data
+```
+
+**Corporate Actions** (Dividends, Splits, IPOs):
+```bash
+# Download dividends, splits, and IPOs
+quantmini polygon corporate-actions \
+  --start-date 2024-01-01 \
+  --end-date 2025-10-21 \
+  --include-ipos \
+  --output-dir $BRONZE_DIR/corporate_actions
+
+# Download ticker changes/rebranding
+quantmini polygon ticker-events AAPL,MSFT,GOOGL \
+  --output-dir $BRONZE_DIR/corporate_actions
+```
+
+**Short Interest & Short Volume**:
+```bash
+# Downloads both short interest AND short volume
+quantmini polygon short-data AAPL,MSFT,GOOGL \
+  --settlement-date-gte 2024-01-01 \
+  --date-gte 2024-01-01 \
+  --output-dir $BRONZE_DIR/fundamentals
 ```
 
 **Bulk Download**:
@@ -750,8 +805,8 @@ uv run python -m src.cli.main data ingest -t stocks_daily \
 
 **Disk space**:
 ```bash
-df -h /Volumes/sandisk/quantmini-data
-du -sh /Volumes/sandisk/quantmini-data/*
+df -h /Volumes/sandisk/quantlake
+du -sh /Volumes/sandisk/quantlake/*
 ```
 
 **Check gaps**:

@@ -36,6 +36,7 @@ from ...download import (
     ForexDownloader,
     CryptoDownloader
 )
+from ...download.ratios import FinancialRatiosAPIDownloader
 
 logger = logging.getLogger(__name__)
 
@@ -359,6 +360,90 @@ def fundamentals(tickers, timeframe, filing_date_gte, filing_date_lt, output_dir
             # Record metadata
             total_records = data['balance_sheets'] + data['cash_flow'] + data['income_statements']
             _record_polygon_metadata('fundamentals', total_records, 'success')
+
+            # Show statistics
+            stats = client.get_statistics()
+            click.echo(f"\n📊 Statistics:")
+            click.echo(f"   Total requests: {stats['total_requests']}")
+            click.echo(f"   Success rate: {stats['success_rate']:.1%}")
+
+            return 0
+
+    return asyncio.run(run())
+
+
+@polygon.command()
+@click.argument('tickers', nargs=-1, required=True)
+@click.option('--start-date', type=str, default=None, help='Start date (YYYY-MM-DD, default: last 180 days)')
+@click.option('--end-date', type=str, default=None, help='End date (YYYY-MM-DD, default: today)')
+@click.option('--output-dir', type=Path, default=None, help='Output directory (partitioned structure)')
+def ratios(tickers, start_date, end_date, output_dir):
+    """Download financial ratios from Polygon API in partitioned structure
+
+    Pre-calculated financial ratios including:
+    - Profitability (ROE, ROA, ROIC, margins)
+    - Liquidity (current ratio, quick ratio, cash ratio)
+    - Leverage (debt to equity, debt to assets, interest coverage)
+    - Efficiency (asset turnover, inventory turnover, receivables turnover)
+    - Market valuation (P/E, P/B, EV/EBITDA)
+    - Growth rates (revenue growth, earnings growth)
+
+    OPTIMIZED: Supports date filtering on API side for much faster downloads!
+    Defaults to last 180 days if no dates specified.
+
+    Examples:
+      quantmini polygon ratios AAPL MSFT --start-date 2024-01-01
+      quantmini polygon ratios AAPL --start-date 2024-01-01 --end-date 2024-12-31
+    """
+    from datetime import datetime, timedelta
+
+    # Use centralized path configuration if output_dir not specified
+    if not output_dir:
+        output_dir = get_quantlake_root() / 'bronze' / 'fundamentals'
+
+    # Default to last 180 days if no dates specified
+    if not start_date and not end_date:
+        today = datetime.now().date()
+        default_start = today - timedelta(days=180)
+        start_date = str(default_start)
+        click.echo(f"ℹ️  No date range specified, defaulting to last 180 days ({default_start} to {today})")
+
+    async def run():
+        config = ConfigLoader()
+        credentials = config.get_credentials('polygon')
+        api_key = _get_api_key(credentials)
+
+        if not api_key:
+            click.echo("❌ API key not found. Please configure config/credentials.yaml", err=True)
+            return 1
+
+        async with PolygonRESTClient(
+            api_key=api_key,
+            max_concurrent=100,
+            max_connections=200
+        ) as client:
+            downloader = FinancialRatiosAPIDownloader(
+                client,
+                output_dir,
+                use_partitioned_structure=True
+            )
+
+            date_info = f" from {start_date or 'beginning'} to {end_date or 'today'}"
+            click.echo(f"📥 Downloading financial ratios for {len(tickers)} tickers{date_info}...")
+            click.echo(f"📂 Saving to partitioned structure: {output_dir}/financial_ratios/")
+
+            data = await downloader.download_ratios_batch(
+                list(tickers),
+                start_date=start_date,
+                end_date=end_date
+            )
+
+            click.echo(f"✅ Downloaded financial ratios:")
+            click.echo(f"   Total records: {data['financial_ratios']}")
+            click.echo(f"   Successful tickers: {data['successful_tickers']}/{data['total_tickers']}")
+
+            # Record metadata
+            _record_polygon_metadata('financial_ratios', data['financial_ratios'], 'success')
 
             # Show statistics
             stats = client.get_statistics()
@@ -879,7 +964,7 @@ def news(tickers, start_date, end_date, days, limit, output_dir):
     """
     # Use centralized path configuration if output_dir not specified
     if not output_dir:
-        output_dir = get_quantlake_root() / 'news'
+        output_dir = get_quantlake_root() / 'bronze' / 'news'
 
     async def run():
         config = ConfigLoader()
