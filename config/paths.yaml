@@ -13,17 +13,18 @@ active_environment: production
 
 # Production environment paths
 production:
-  # Main data lake root (Medallion Architecture)
-  data_lake_root: /Volumes/sandisk/quantmini-lake
+  # Main data lake root (Medallion Architecture) - External SSD
+  data_lake_root: /Volumes/990EVOPLUS/quantlake
 
   # Explicit layer paths (optional - will use data_lake_root/<layer> if not specified)
-  bronze_path: /Volumes/sandisk/quantmini-lake/bronze
-  silver_path: /Volumes/sandisk/quantmini-lake/silver
-  gold_path: /Volumes/sandisk/quantmini-lake/gold
+  landing_path: /Volumes/990EVOPLUS/quantlake/landing
+  bronze_path: /Volumes/990EVOPLUS/quantlake/bronze
+  silver_path: /Volumes/990EVOPLUS/quantlake/silver
+  gold_path: /Volumes/990EVOPLUS/quantlake/gold
 
   # Metadata and logs
-  metadata_path: /Volumes/sandisk/quantmini-lake/metadata
-  logs_path: /Volumes/sandisk/quantmini-lake/logs
+  metadata_path: /Volumes/990EVOPLUS/quantlake/metadata
+  logs_path: /Volumes/990EVOPLUS/quantlake/logs
 
 # Test environment paths (for development/testing)
 test:

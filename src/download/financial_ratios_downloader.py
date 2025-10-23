@@ -21,6 +21,7 @@ from datetime import datetime
 import logging
 
 from ..features.financial_ratios import FinancialRatiosCalculator
+from ..utils.paths import get_quantlake_root
 
 logger = logging.getLogger(__name__)
 
@@ -30,12 +31,12 @@ class FinancialRatiosDownloader:
     Calculate financial ratios from partitioned fundamentals data
 
     Reads from:
-    - data/partitioned_screener/balance_sheets/
-    - data/partitioned_screener/income_statements/
-    - data/partitioned_screener/cash_flow/
+    - {quantlake_root}/fundamentals/balance_sheets/
+    - {quantlake_root}/fundamentals/income_statements/
+    - {quantlake_root}/fundamentals/cash_flow/
 
     Saves to:
-    - data/partitioned_screener/financial_ratios/year=YYYY/month=MM/ticker=SYMBOL.parquet
+    - {quantlake_root}/fundamentals/financial_ratios/year=YYYY/month=MM/ticker=SYMBOL.parquet
     """
 
     def __init__(
@@ -377,9 +378,10 @@ async def main():
 
     try:
         # Create downloader
+        fundamentals_path = get_quantlake_root() / 'fundamentals'
         downloader = FinancialRatiosDownloader(
-            input_dir=Path('data/partitioned_screener'),
-            output_dir=Path('data/partitioned_screener')
+            input_dir=fundamentals_path,
+            output_dir=fundamentals_path
         )
 
         print("✅ FinancialRatiosDownloader initialized\n")

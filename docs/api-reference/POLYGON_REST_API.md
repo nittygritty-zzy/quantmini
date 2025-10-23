@@ -27,14 +27,17 @@ High-performance data pipeline for downloading reference data, corporate actions
    - Ticker details
 
 3. **CorporateActionsDownloader** - Corporate actions data
-   - Dividends
-   - Stock splits
-   - Ticker events
+   - Dividends (`/v3/reference/dividends`)
+   - Stock splits (`/v3/reference/splits`)
+   - IPOs (`/vX/reference/ipos`)
+   - Ticker events (`/vX/reference/tickers/{id}/events`)
 
-4. **FundamentalsDownloader** - Financial statements
+4. **FundamentalsDownloader** - Financial statements & short data
    - Balance sheets
    - Cash flow statements
    - Income statements
+   - Short interest (`/stocks/v1/short-interest` - 2 year max)
+   - Short volume (`/stocks/v1/short-volume` - all history)
 
 5. **EconomyDataDownloader** - Macroeconomic indicators
    - Treasury yields

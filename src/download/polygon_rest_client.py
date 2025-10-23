@@ -44,7 +44,8 @@ class PolygonRESTClient:
         max_connections: int = 200,
         max_retries: int = 3,
         timeout: int = 30,
-        enable_http2: bool = True
+        enable_http2: bool = True,
+        enable_adaptive_throttling: bool = True
     ):
         """
         Initialize Polygon REST API client
@@ -57,11 +58,13 @@ class PolygonRESTClient:
             max_retries: Maximum retry attempts
             timeout: Request timeout in seconds
             enable_http2: Enable HTTP/2 for better performance
+            enable_adaptive_throttling: Enable automatic concurrency reduction on errors
         """
         self.api_key = api_key
         self.base_url = base_url.rstrip('/')
         self.max_concurrent = max_concurrent
         self.max_retries = max_retries
+        self.enable_adaptive_throttling = enable_adaptive_throttling
 
         # Create async HTTP client with connection pooling
         limits = httpx.Limits(
@@ -78,17 +81,29 @@ class PolygonRESTClient:
         )
 
         # Semaphore for concurrency control
+        self._current_concurrent = max_concurrent
+        self._min_concurrent = max(1, max_concurrent // 10)  # Never go below 10% of max
         self.semaphore = asyncio.Semaphore(max_concurrent)
+
+        # Adaptive throttling tracking
+        self._connection_errors = 0
+        self._error_threshold = 5  # Throttle after 5 connection errors
+        self._throttle_cooldown = 0  # Seconds since last throttle
+        self._recovery_interval = 30  # Seconds between recovery attempts
+        self._last_adjustment = 0  # Timestamp of last adjustment
 
         # Statistics
         self.total_requests = 0
         self.total_retries = 0
         self.total_errors = 0
+        self.total_connection_errors = 0
+        self.total_throttles = 0
         self._stats_lock = asyncio.Lock()
 
         logger.info(
             f"PolygonRESTClient initialized "
-            f"(max_concurrent={max_concurrent}, http2={enable_http2})"
+            f"(max_concurrent={max_concurrent}, http2={enable_http2}, "
+            f"adaptive_throttling={enable_adaptive_throttling})"
         )
 
     async def close(self):
@@ -102,6 +117,72 @@ class PolygonRESTClient:
     async def __aexit__(self, exc_type, exc_val, exc_tb):
         """Async context manager exit"""
         await self.close()
+
+    async def _throttle_down(self):
+        """Reduce concurrency due to connection errors"""
+        if not self.enable_adaptive_throttling:
+            return
+
+        async with self._stats_lock:
+            import time
+            current_time = time.time()
+
+            # Avoid throttling too frequently
+            if current_time - self._last_adjustment < 10:
+                return
+
+            old_concurrent = self._current_concurrent
+            # Reduce by 50%, but not below minimum
+            new_concurrent = max(self._min_concurrent, self._current_concurrent // 2)
+
+            if new_concurrent < old_concurrent:
+                self._current_concurrent = new_concurrent
+                self._last_adjustment = current_time
+                self.total_throttles += 1
+
+                logger.warning(
+                    f"⚠️  Adaptive throttling: reducing concurrency "
+                    f"{old_concurrent} → {new_concurrent} due to connection errors"
+                )
+
+                # Create new semaphore with reduced limit
+                # Note: Can't modify existing semaphore, but new requests will use current limit
+                self.semaphore = asyncio.Semaphore(new_concurrent)
+
+                # Reset error counter after throttling
+                self._connection_errors = 0
+
+    async def _try_recover(self):
+        """Gradually increase concurrency if things are stable"""
+        if not self.enable_adaptive_throttling:
+            return
+
+        async with self._stats_lock:
+            import time
+            current_time = time.time()
+
+            # Only try recovery if we're throttled and enough time has passed
+            if self._current_concurrent >= self.max_concurrent:
+                return
+
+            if current_time - self._last_adjustment < self._recovery_interval:
+                return
+
+            old_concurrent = self._current_concurrent
+            # Increase by 25%, but not above maximum
+            new_concurrent = min(self.max_concurrent, int(self._current_concurrent * 1.25))
+
+            if new_concurrent > old_concurrent:
+                self._current_concurrent = new_concurrent
+                self._last_adjustment = current_time
+
+                logger.info(
+                    f"✨ Adaptive recovery: increasing concurrency "
+                    f"{old_concurrent} → {new_concurrent}"
+                )
+
+                # Create new semaphore with increased limit
+                self.semaphore = asyncio.Semaphore(new_concurrent)
 
     async def _make_request(
         self,
@@ -192,9 +273,30 @@ class PolygonRESTClient:
                         raise PolygonAPIError(f"API error: {error_msg}")
 
                     logger.debug(f"Request successful: {endpoint}")
+
+                    # Try to recover concurrency if we're throttled and stable
+                    await self._try_recover()
+
                     return data
 
                 except httpx.HTTPError as e:
+                    # Check if it's a connection error that should trigger throttling
+                    is_connection_error = (
+                        "ConnectionTerminated" in str(type(e).__name__) or
+                        "ConnectionTerminated" in str(e) or
+                        "RemoteProtocolError" in str(type(e).__name__) or
+                        "Connection" in str(e)
+                    )
+
+                    if is_connection_error:
+                        async with self._stats_lock:
+                            self.total_connection_errors += 1
+                            self._connection_errors += 1
+
+                        # Trigger throttling if too many connection errors
+                        if self._connection_errors >= self._error_threshold:
+                            await self._throttle_down()
+
                     if attempt < self.max_retries:
                         wait_time = min(2 ** attempt, 30)
                         logger.warning(
@@ -393,15 +495,20 @@ class PolygonRESTClient:
         return responses
 
     def get_statistics(self) -> Dict[str, Any]:
-        """Get client statistics"""
+        """Get client statistics including adaptive throttling metrics"""
         return {
             'total_requests': self.total_requests,
             'total_retries': self.total_retries,
             'total_errors': self.total_errors,
+            'total_connection_errors': self.total_connection_errors,
+            'total_throttles': self.total_throttles,
+            'current_concurrency': self._current_concurrent,
+            'max_concurrency': self.max_concurrent,
             'success_rate': (
                 (self.total_requests - self.total_errors) / self.total_requests
                 if self.total_requests > 0 else 0.0
-            )
+            ),
+            'throttled': self._current_concurrent < self.max_concurrent
         }
 
     def reset_statistics(self):
@@ -409,6 +516,9 @@ class PolygonRESTClient:
         self.total_requests = 0
         self.total_retries = 0
         self.total_errors = 0
+        self.total_connection_errors = 0
+        self.total_throttles = 0
+        self._connection_errors = 0
 
 
 # Convenience function to format dates

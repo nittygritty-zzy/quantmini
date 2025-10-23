@@ -82,7 +82,13 @@ def download(data_type, start_date, end_date, output):
     }
 
     catalog = S3Catalog()
-    output_dir = Path(output) if output else Path('data/raw')
+    # Use configured landing path if no output specified
+    if output:
+        output_dir = Path(output)
+    else:
+        from src.utils.paths import get_quantlake_root
+        quantlake_root = get_quantlake_root()
+        output_dir = quantlake_root / "landing"
     output_dir.mkdir(parents=True, exist_ok=True)
 
     click.echo(f"📥 Downloading {data_type} from {start_date} to {end_date}...")
@@ -90,14 +96,23 @@ def download(data_type, start_date, end_date, output):
     async def download_data():
         downloader = AsyncS3Downloader(credentials)
         keys = catalog.get_date_range_keys(data_type, start_date, end_date)
-        
+
         click.echo(f"   Found {len(keys)} files to download")
-        
+
         with click.progressbar(keys, label='Downloading') as bar:
             for key in bar:
                 try:
+                    # Extract date from filename
                     date = key.split('/')[-1].replace('.csv.gz', '')
-                    output_file = output_dir / f"{date}.csv.gz"
+
+                    # Parse date for partitioning: YYYY-MM-DD
+                    year, month, day = date.split('-')
+
+                    # Create partitioned path: landing/{data_type}/year={YYYY}/month={MM}/{YYYY-MM-DD}.csv.gz
+                    partition_dir = output_dir / data_type / f"year={year}" / f"month={month}"
+                    partition_dir.mkdir(parents=True, exist_ok=True)
+
+                    output_file = partition_dir / f"{date}.csv.gz"
                     await downloader.download_to_file('flatfiles', key, output_file, decompress=False)
                 except Exception as e:
                     click.echo(f"\n❌ Failed to download {key}: {e}", err=True)

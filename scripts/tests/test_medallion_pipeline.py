@@ -38,7 +38,9 @@ async def test_pipeline():
     """Run complete pipeline test for 1 week of data"""
 
     # Test configuration
-    TEST_DIR = Path('/Users/zheyuanzhao/workspace/quantmini/test_pipeline')
+    # Use project-relative path instead of absolute path
+    PROJECT_ROOT = Path(__file__).parent.parent.parent
+    TEST_DIR = PROJECT_ROOT / 'test_pipeline'
     START_DATE = '2025-10-11'
     END_DATE = '2025-10-18'
     TEST_TICKERS = ['AAPL', 'MSFT', 'GOOGL', 'TSLA', 'NVDA']  # 5 tickers for testing

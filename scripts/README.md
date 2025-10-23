@@ -56,8 +56,10 @@ Location: `scripts/download/`
   ```
 
 **Corporate Actions**
-- `download_corporate_actions.py` - Download corporate events (splits, dividends)
-- `download_ticker_events_optimized.py` - Batch download ticker events (optimized)
+- `download_corporate_actions.py` - Download dividends, splits, IPOs
+  - API Endpoints: `/v3/reference/dividends`, `/v3/reference/splits`, `/vX/reference/ipos`
+- `download_ticker_events_optimized.py` - Batch download ticker changes/rebranding
+  - API Endpoint: `/vX/reference/tickers/{id}/events`
   ```bash
   # Download ticker events for all CS tickers (optimized, 2-5 minutes)
   uv run python scripts/download/download_ticker_events_optimized.py
@@ -69,12 +71,15 @@ Location: `scripts/download/`
   # Download fundamentals with short data
   uv run python scripts/download/download_fundamentals.py --tickers-file tickers_cs.txt --include-short-data
   ```
+- `download_short_data.py` - Download short interest & short volume
+  - API Endpoints:
+    - `/stocks/v1/short-interest` - Bi-weekly short interest (2 year max)
+    - `/stocks/v1/short-volume` - Daily short volume (all history)
 
 **Reference Data**
 - `download_reference_data.py` - Download ticker metadata and reference data
 - `download_all_tickers.py` - Download complete ticker list
 - `download_all_relationships.py` - Download ticker relationships
-- `download_short_data.py` - Download short interest data
 
 ---
 
@@ -142,9 +147,79 @@ Location: `scripts/automation/`
 
 **Root Level**
 - `bulk_download_all_data.sh` - Bulk download all data types
-- `daily_update.sh` - Daily update script (legacy)
+- **`daily_update.sh`** - **MAIN ENTRY POINT** - Complete bronze→silver→gold pipeline
 - `weekly_update.sh` - Weekly update script (legacy)
 - `setup_weekly_automation.sh` - Setup weekly automation
+
+### Daily Update Script (MAIN ENTRY POINT)
+
+**File**: `daily_update.sh`
+
+The **primary entry point** for all daily data pipeline operations using CLI commands. This script orchestrates the complete bronze → silver → gold data flow.
+
+#### Features
+- **Complete Pipeline**: All bronze, silver, and gold layer operations via CLI
+- **Flexible**: Process yesterday's data, specific dates, or backfill multiple days
+- **Selective**: Skip bronze, silver, or gold layers as needed
+- **Comprehensive Logging**: Timestamped logs in `logs/`
+- **Error Tracking**: Reports success/failure of each stage
+
+#### Usage
+
+```bash
+# Process yesterday's data (default)
+./scripts/daily_update.sh
+
+# Process specific date
+./scripts/daily_update.sh --date 2025-09-15
+
+# Backfill last 7 days
+./scripts/daily_update.sh --days-back 7
+
+# Only transformations (skip bronze)
+./scripts/daily_update.sh --skip-bronze
+
+# Dry run to preview
+./scripts/daily_update.sh --dry-run
+
+# Custom tickers
+./scripts/daily_update.sh --fundamental-tickers "AAPL MSFT GOOGL"
+```
+
+#### Pipeline Stages
+
+**Bronze Layer (Data Ingestion):**
+1. Stocks Daily/Minute (S3 → Parquet)
+2. Options Daily/Minute (S3 → Parquet)
+3. Fundamentals (Polygon REST API)
+4. Financial Ratios (Calculated)
+5. Corporate Actions (Polygon REST API)
+6. News (Polygon REST API)
+7. Reference Data (Weekly, Mondays only)
+
+**Silver Layer (Transformations):**
+1. Financial Ratios → Silver (via `quantmini transform financial-ratios`)
+2. Corporate Actions → Silver (via `quantmini transform corporate-actions`)
+3. Fundamentals → Silver (via `quantmini transform fundamentals`)
+
+**Gold Layer (Enrichment):**
+1. Stocks Daily → Enriched + Qlib Binary
+2. Stocks Minute → Enriched Parquet
+3. Options Daily → Enriched Parquet
+
+#### Cron Setup
+
+```bash
+# Edit crontab
+crontab -e
+
+# Run daily at 6 AM (weekdays only) - update paths to your installation
+0 6 * * 1-5 /path/to/quantmini/scripts/daily_update.sh >> /path/to/quantmini/logs/cron.log 2>&1
+```
+
+#### Logs
+
+All operations logged to: `logs/daily_update_YYYYMMDD_HHMMSS.log`
 
 ---
 

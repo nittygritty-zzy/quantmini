@@ -281,8 +281,15 @@ class ConfigLoader:
         Returns:
             Path to legacy data root directory
         """
-        data_root = self.get('data_root', Path('data'))
-        return Path(data_root) if not isinstance(data_root, Path) else data_root
+        from src.utils.paths import get_quantlake_root
+
+        # Check if data_root is explicitly configured
+        configured_data_root = self.get('data_root')
+        if configured_data_root:
+            return Path(configured_data_root) if not isinstance(configured_data_root, Path) else configured_data_root
+
+        # Fall back to centralized path configuration
+        return get_quantlake_root()
 
     def get_bronze_path(self) -> Path:
         """
@@ -291,14 +298,17 @@ class ConfigLoader:
         Returns:
             Path to bronze directory
         """
+        from src.utils.paths import get_bronze_path as utils_get_bronze_path
+
         bronze_path = self.get('bronze_path')
         if bronze_path:
             return Path(bronze_path)
-        # Use data_lake_root/bronze
+        # Use data_lake_root/bronze if configured
         data_lake_root = self.get('data_lake_root')
-        if not data_lake_root:
-            raise ValueError("data_lake_root not configured in pipeline_config.yaml")
-        return Path(data_lake_root) / 'bronze'
+        if data_lake_root:
+            return Path(data_lake_root) / 'bronze'
+        # Fall back to environment-based path
+        return utils_get_bronze_path()
 
     def get_silver_path(self) -> Path:
         """
@@ -307,14 +317,17 @@ class ConfigLoader:
         Returns:
             Path to silver directory
         """
+        from src.utils.paths import get_silver_path as utils_get_silver_path
+
         silver_path = self.get('silver_path')
         if silver_path:
             return Path(silver_path)
-        # Use data_lake_root/silver
+        # Use data_lake_root/silver if configured
         data_lake_root = self.get('data_lake_root')
-        if not data_lake_root:
-            raise ValueError("data_lake_root not configured in pipeline_config.yaml")
-        return Path(data_lake_root) / 'silver'
+        if data_lake_root:
+            return Path(data_lake_root) / 'silver'
+        # Fall back to environment-based path
+        return utils_get_silver_path()
 
     def get_gold_path(self) -> Path:
         """
@@ -323,14 +336,17 @@ class ConfigLoader:
         Returns:
             Path to gold directory
         """
+        from src.utils.paths import get_gold_path as utils_get_gold_path
+
         gold_path = self.get('gold_path')
         if gold_path:
             return Path(gold_path)
-        # Use data_lake_root/gold
+        # Use data_lake_root/gold if configured
         data_lake_root = self.get('data_lake_root')
-        if not data_lake_root:
-            raise ValueError("data_lake_root not configured in pipeline_config.yaml")
-        return Path(data_lake_root) / 'gold'
+        if data_lake_root:
+            return Path(data_lake_root) / 'gold'
+        # Fall back to environment-based path
+        return utils_get_gold_path()
 
     def get_metadata_path(self) -> Path:
         """

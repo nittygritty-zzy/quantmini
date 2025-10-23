@@ -60,10 +60,16 @@ S3 Ingestion (4 jobs) + Polygon API Downloads (7 jobs)
 ├── Stocks Daily/Minute → Bronze
 ├── Options Daily/Minute → Bronze
 ├── Fundamentals (180-day window)
-├── Corporate Actions
-├── Ticker Events
+├── Corporate Actions (Dividends, Splits, IPOs)
+│   ├── /v3/reference/dividends
+│   ├── /v3/reference/splits
+│   └── /vX/reference/ipos
+├── Ticker Events (Symbol changes/rebranding)
+│   └── /vX/reference/tickers/{id}/events
 ├── News
 └── Short Interest/Volume (30-day window)
+    ├── /stocks/v1/short-interest (2 year max)
+    └── /stocks/v1/short-volume (all history)
 
 Sequential after parallel:
 └── Financial Ratios (depends on fundamentals)
@@ -127,13 +133,16 @@ Time: ~1-2 minutes (feature dependencies require sequential)
 
 ### Summary Table
 
-| Data Type | Frequency | Lookback | Future Window | API Calls/Week |
-|-----------|-----------|----------|---------------|----------------|
-| **Fundamentals** | Weekly | 180 days | N/A | ~100 |
-| **Corporate Actions** | Daily | 30 days | 90 days | ~14 |
-| **Short Interest/Volume** | Weekly | 30 days | N/A | ~2,000 |
-| **Ticker Events** | Weekly | All time | N/A | ~50 |
-| **Financial Ratios** | Weekly | Derived | N/A | 0 (calculated) |
+| Data Type | Frequency | Lookback | Future Window | API Endpoint | API Calls/Week |
+|-----------|-----------|----------|---------------|--------------|----------------|
+| **Fundamentals** | Weekly | 180 days | N/A | (Balance sheets, Income, Cash flow) | ~100 |
+| **Corporate Actions - Dividends** | Daily | 30 days | 90 days | `/v3/reference/dividends` | ~14 |
+| **Corporate Actions - Splits** | Daily | 30 days | 90 days | `/v3/reference/splits` | ~14 |
+| **Corporate Actions - IPOs** | Daily | 30 days | 90 days | `/vX/reference/ipos` | ~14 |
+| **Ticker Events** | Weekly | All time | N/A | `/vX/reference/tickers/{id}/events` | ~50 |
+| **Short Interest** | Weekly | 30 days | N/A | `/stocks/v1/short-interest` (2 year max) | ~2,000 |
+| **Short Volume** | Weekly | 30 days | N/A | `/stocks/v1/short-volume` (all history) | ~2,000 |
+| **Financial Ratios** | Weekly | Derived | N/A | (Calculated from fundamentals) | 0 |
 
 ### Fundamentals (Weekly)
 
@@ -163,8 +172,14 @@ quantmini polygon financial-ratios $TICKERS \
 
 **Recommended Refresh: Every day at 3 AM**
 
+**API Endpoints:**
+- Dividends: `/v3/reference/dividends`
+- Splits: `/v3/reference/splits`
+- IPOs: `/vX/reference/ipos`
+- Ticker Changes: `/vX/reference/tickers/{id}/events`
+
 ```bash
-# Historical (last 30 days)
+# Historical (last 30 days) - Downloads Dividends, Splits, IPOs
 quantmini polygon corporate-actions \
   --start-date $(date -d '30 days ago' +%Y-%m-%d) \
   --end-date $(date +%Y-%m-%d) \
@@ -177,12 +192,17 @@ quantmini polygon corporate-actions \
   --end-date $(date -d '90 days' +%Y-%m-%d) \
   --include-ipos \
   --output-dir $BRONZE_DIR/corporate_actions_future
+
+# Ticker changes/rebranding (weekly recommended)
+quantmini polygon ticker-events $FUNDAMENTAL_TICKERS \
+  --output-dir $BRONZE_DIR/corporate_actions
 ```
 
 **Rationale:**
 - Dividends/splits announced unpredictably
 - 30-day lookback captures recent changes and corrections
 - 90-day future window captures announced dividends for strategies
+- Ticker events capture symbol changes and rebranding
 - Daily refresh ensures timely updates
 
 **Monthly Full Backfill (1st of month, 1 AM):**
@@ -198,19 +218,23 @@ quantmini polygon corporate-actions \
 
 **Recommended Refresh: Every Monday at 4 AM**
 
+**API Endpoints:**
+- Short Interest: `/stocks/v1/short-interest` (2 year history max, bi-weekly)
+- Short Volume: `/stocks/v1/short-volume` (all history, daily)
+
 ```bash
 # ⚠️ IMPORTANT: API returns ALL tickers regardless of ticker parameter
-quantmini polygon short-data ALL \
+# Downloads both short interest AND short volume in one command
+quantmini polygon short-data $FUNDAMENTAL_TICKERS \
   --settlement-date-gte $(date -d '30 days ago' +%Y-%m-%d) \
   --date-gte $(date -d '30 days ago' +%Y-%m-%d) \
-  --output-dir $BRONZE_DIR/fundamentals \
-  --limit 1000
+  --output-dir $BRONZE_DIR/fundamentals
 ```
 
 **Rationale:**
-- Short interest updated bi-weekly (15th and end of month)
-- 30-day window captures 2 reporting cycles
-- API returns all tickers - filter in silver layer
+- Short interest: Updated bi-weekly (15th and end of month), 2 year max history
+- Short volume: Daily venue-specific volume, all history available
+- 30-day window captures 2 short interest reporting cycles
 - Weekly refresh captures updates without daily overhead
 
 **Performance:** 2-5 minutes with 30-day window (vs 30-60+ min without filtering)
@@ -333,20 +357,21 @@ silver/corporate_actions/
 
 ### Event Types Tracked
 
-**Dividend Fields:**
+**1. Dividend Fields:** (API: `/v3/reference/dividends`)
 - cash_amount, currency, declaration_date, ex_dividend_date
 - record_date, pay_date, frequency, div_type
 - **Derived:** annualized_amount, is_special, quarter
 
-**Split Fields:**
+**2. Split Fields:** (API: `/v3/reference/splits`)
 - execution_date, from, to, ratio
 - **Derived:** is_reverse (ratio < 1.0)
 
-**IPO Fields:**
+**3. IPO Fields:** (API: `/vX/reference/ipos`)
 - listing_date, issue_price, shares_offered, exchange, status
 
-**Ticker Change Fields:**
-- new_ticker
+**4. Ticker Change Fields:** (API: `/vX/reference/tickers/{id}/events`)
+- new_ticker, announcement_date, effective_date
+- **Tracks:** Symbol changes, rebranding events
 
 ### Query Performance
 

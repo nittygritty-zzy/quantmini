@@ -14,9 +14,13 @@
 #   * Dividends, Splits, IPOs, Ticker Events (2005-2025)
 #   * Balance Sheets, Income, Cash Flow (2010-2025)
 #   * Short Interest & Short Volume (2 years)
-# - Phase 2: Parallel S3 downloads (Daily price data, 10 years)
+# - Phase 2: Parallel S3 downloads (Stocks + Options daily data, based on S3 access)
+#   * Stocks daily: 2020-10-26 onwards
+#   * Options daily: 2023-10-24 onwards
 # - Phase 3: Parallel news downloads (3 years)
-# - Phase 4: Sequential minute data ingestion (Stocks + Options, year-by-year)
+# - Phase 4: Sequential minute data ingestion (based on S3 access)
+#   * Stocks minute: 2020-10-26 onwards
+#   * Options minute: 2023-10-24 onwards
 # - Aggressive parallelization: 8-10 concurrent jobs (Phases 1-3)
 # - Sequential processing for Phase 4 (memory-safe for large datasets)
 # - Real-time monitoring with progress dashboard
@@ -56,8 +60,27 @@ source "$PROJECT_ROOT/.venv/bin/activate"
 MAX_PARALLEL_JOBS=8  # Conservative for API calls (10 cores, leave 2 for system)
 MAX_S3_DOWNLOADS=10  # Aggressive for S3 downloads (network-bound)
 
-# Data paths
-QUANTLAKE_ROOT="${QUANTLAKE_ROOT:-$HOME/workspace/quantlake}"
+# Data paths - read from config/paths.yaml (ONLY source of truth)
+PATHS_CONFIG="$PROJECT_ROOT/config/paths.yaml"
+if [ -f "$PATHS_CONFIG" ]; then
+    QUANTLAKE_ROOT=$(python -c "
+import yaml
+with open('$PATHS_CONFIG') as f:
+    config = yaml.safe_load(f)
+    active_env = config.get('active_environment', 'production')
+    print(config.get(active_env, {}).get('data_lake_root', ''))
+")
+
+    if [ -z "$QUANTLAKE_ROOT" ]; then
+        echo "ERROR: Could not read data_lake_root from $PATHS_CONFIG"
+        exit 1
+    fi
+    echo "Using data_lake_root from config/paths.yaml: $QUANTLAKE_ROOT"
+else
+    echo "ERROR: Config file not found: $PATHS_CONFIG"
+    exit 1
+fi
+
 BRONZE_DIR="$QUANTLAKE_ROOT/bronze"
 SILVER_DIR="$QUANTLAKE_ROOT/silver"
 LOG_DIR="$QUANTLAKE_ROOT/logs"
@@ -70,8 +93,10 @@ TIMESTAMP=$(date +%Y%m%d_%H%M%S)
 LOG_FILE="$LOG_DIR/historical_load_${TIMESTAMP}.log"
 PROGRESS_FILE="/tmp/historical_load_progress_${TIMESTAMP}.json"
 
-# Fundamental tickers (top 50 S&P 500)
-FUNDAMENTAL_TICKERS="AAPL MSFT GOOGL AMZN NVDA META TSLA BRK.B JPM V UNH XOM JNJ WMT MA PG AVGO HD CVX MRK ABBV COST KO PEP LLY BAC PFE ADBE TMO CSCO MCD ACN CRM DHR AMD ABT NFLX DIS CMCSA NKE TXN VZ QCOM UNP RTX WFC ORCL PM INTC"
+# Fundamental tickers - loaded dynamically from ticker reference data
+# Fallback to top 50 S&P 500 if ticker table not available
+FUNDAMENTAL_TICKERS_FALLBACK="AAPL MSFT GOOGL AMZN NVDA META TSLA BRK.B JPM V UNH XOM JNJ WMT MA PG AVGO HD CVX MRK ABBV COST KO PEP LLY BAC PFE ADBE TMO CSCO MCD ACN CRM DHR AMD ABT NFLX DIS CMCSA NKE TXN VZ QCOM UNP RTX WFC ORCL PM INTC"
+FUNDAMENTAL_TICKERS=""  # Will be populated after ticker reference data download
 
 ################################################################################
 # Color Output
@@ -203,6 +228,26 @@ phase1_corporate_actions_fundamentals() {
 
     PHASE1_START=$(date +%s)
 
+    # Reference Data: Download/Update Ticker Metadata FIRST
+    log "Step 0: Downloading/Updating Ticker Reference Data..."
+    log_info "This ensures we have the latest ticker list for fundamentals"
+
+    # Download all ticker types (especially CS for common stocks)
+    log_info "Downloading ticker metadata..."
+    python "$PROJECT_ROOT/scripts/download/download_all_tickers.py" --all 2>&1 | tee -a "$LOG_FILE"
+
+    # Load active common stocks from ticker table
+    log_info "Loading active ticker list from reference data..."
+    if FUNDAMENTAL_TICKERS=$(python "$PROJECT_ROOT/scripts/utils/get_active_tickers.py" 2>&1); then
+        TICKER_COUNT=$(echo "$FUNDAMENTAL_TICKERS" | wc -w)
+        log_success "Loaded $TICKER_COUNT active common stocks from ticker table"
+    else
+        log_warning "Could not load tickers from reference data, using fallback list"
+        FUNDAMENTAL_TICKERS="$FUNDAMENTAL_TICKERS_FALLBACK"
+        TICKER_COUNT=$(echo "$FUNDAMENTAL_TICKERS" | wc -w)
+        log_info "Using fallback: $TICKER_COUNT tickers"
+    fi
+
     # Corporate Actions: 2005-2025 (20 years) - Split into 5-year chunks
     log "Starting Corporate Actions download (2005-2025)..."
 
@@ -235,42 +280,123 @@ phase1_corporate_actions_fundamentals() {
         --output-dir "$BRONZE_DIR/corporate_actions" \
         2>&1 | tee -a "$LOG_FILE" &
 
-    # Fundamentals: 2010-2025 (15 years) - Split by year for parallelization
-    log "Starting Fundamentals download (2010-2025)..."
+    # Fundamentals: 2010-2025 (15 years) - Download 20 tickers in parallel
+    log "Starting Fundamentals download (2010-2025) - 20 tickers in parallel..."
+
+    # Convert space-separated tickers to array
+    TICKER_ARRAY=($FUNDAMENTAL_TICKERS)
+    TOTAL_TICKERS=${#TICKER_ARRAY[@]}
+    MAX_PARALLEL_TICKERS=20
+
+    log_info "Downloading fundamentals for $TOTAL_TICKERS tickers (20 at a time)"
 
     FUND_PIDS=()
-    for YEAR in {2010..2025}; do
-        log_info "Fundamentals: $YEAR"
-        quantmini polygon fundamentals $FUNDAMENTAL_TICKERS \
+    TICKER_COUNT=0
+
+    for TICKER in "${TICKER_ARRAY[@]}"; do
+        TICKER_COUNT=$((TICKER_COUNT + 1))
+        log_info "[$TICKER_COUNT/$TOTAL_TICKERS] Downloading $TICKER (all years 2010-2025)..."
+
+        # Download all years for this ticker in one job
+        quantmini polygon fundamentals "$TICKER" \
             --timeframe quarterly \
-            --filing-date-gte "${YEAR}-01-01" \
-            --filing-date-lt "$((YEAR+1))-01-01" \
+            --filing-date-gte "2010-01-01" \
+            --filing-date-lt "2026-01-01" \
             --output-dir "$BRONZE_DIR/fundamentals" \
             2>&1 | tee -a "$LOG_FILE" &
 
         FUND_PIDS+=($!)
 
-        # Limit concurrent jobs
-        if [ ${#FUND_PIDS[@]} -ge $MAX_PARALLEL_JOBS ]; then
+        # Limit to 20 concurrent ticker downloads
+        if [ ${#FUND_PIDS[@]} -ge $MAX_PARALLEL_TICKERS ]; then
             wait -n  # Wait for any job to finish
+            FUND_PIDS=($(jobs -p))  # Update PID list
         fi
     done
 
-    # Short Interest/Volume (2 years)
-    log "Starting Short Interest/Volume download (2 years)..."
+    # Wait for remaining jobs
+    log_info "Waiting for remaining fundamentals downloads to complete..."
+    wait
+
+    # Financial Ratios - Using focused downloader for all 9,900 tickers
+    log "Starting Financial Ratios download (2010-2025) - Focused downloader..."
+
+    log_info "Downloading financial ratios for all tickers (batch mode, smart resume)"
+
+    python "$PROJECT_ROOT/scripts/download/download_financial_ratios_only.py" \
+        2>&1 | tee -a "$LOG_FILE" &
+
+    wait
+
+    # Short Interest/Volume (2 years) - Download 20 tickers in parallel
+    log "Starting Short Interest/Volume download (2 years) - 20 tickers in parallel..."
     TWO_YEARS_AGO=$(date -v-2y +%Y-%m-%d 2>/dev/null || date -d '2 years ago' +%Y-%m-%d)
 
-    log_info "Short Data: $FUNDAMENTAL_TICKERS (since $TWO_YEARS_AGO)"
-    quantmini polygon short-data $FUNDAMENTAL_TICKERS \
-        --settlement-date-gte "$TWO_YEARS_AGO" \
-        --date-gte "$TWO_YEARS_AGO" \
-        --output-dir "$BRONZE_DIR/fundamentals" \
-        --limit 1000 \
+    log_info "Downloading short data for $TOTAL_TICKERS tickers (20 at a time)"
+
+    SHORT_PIDS=()
+    TICKER_COUNT=0
+
+    for TICKER in "${TICKER_ARRAY[@]}"; do
+        TICKER_COUNT=$((TICKER_COUNT + 1))
+        log_info "[$TICKER_COUNT/$TOTAL_TICKERS] Downloading short data for $TICKER..."
+
+        quantmini polygon short-data "$TICKER" \
+            --settlement-date-gte "$TWO_YEARS_AGO" \
+            --date-gte "$TWO_YEARS_AGO" \
+            --output-dir "$BRONZE_DIR/fundamentals" \
+            --limit 1000 \
+            2>&1 | tee -a "$LOG_FILE" &
+
+        SHORT_PIDS+=($!)
+
+        # Limit to 20 concurrent ticker downloads
+        if [ ${#SHORT_PIDS[@]} -ge $MAX_PARALLEL_TICKERS ]; then
+            wait -n
+            SHORT_PIDS=($(jobs -p))
+        fi
+    done
+
+    # Wait for remaining jobs
+    log_info "Waiting for remaining short data downloads to complete..."
+    wait
+
+    # Additional Reference Data: Ticker Details and Relationships
+    log "Downloading additional ticker metadata and relationships..."
+
+    # Ticker Details/Metadata (comprehensive company info)
+    log_info "Ticker Metadata: downloading detailed company information"
+    python "$PROJECT_ROOT/scripts/download/download_ticker_metadata.py" \
+        --bulk-concurrency 100 \
+        --detail-concurrency 200 \
+        2>&1 | tee -a "$LOG_FILE" &
+
+    # Related Companies (CS, ETF, PFD types)
+    log_info "Ticker Relationships: downloading related companies"
+    python "$PROJECT_ROOT/scripts/download/download_all_relationships.py" \
+        --types CS,ETF,PFD \
         2>&1 | tee -a "$LOG_FILE" &
 
     # Wait for all Phase 1 jobs to complete
     log_info "Waiting for Phase 1 jobs to complete..."
     wait
+
+    # Consolidate Ticker Reference Data to Silver Layer
+    log ""
+    log "========================================="
+    log "CONSOLIDATING TICKER DATA → SILVER LAYER"
+    log "========================================="
+    log ""
+
+    log_info "Consolidating ticker reference data for screening and analysis..."
+    if python "$PROJECT_ROOT/scripts/transformation/consolidate_ticker_reference.py" \
+        --bronze-dir "$BRONZE_DIR" \
+        --silver-dir "$SILVER_DIR" \
+        2>&1 | tee -a "$LOG_FILE"; then
+        log_success "Ticker reference data consolidated to Silver layer"
+    else
+        log_error "Ticker reference consolidation failed (non-fatal)"
+    fi
 
     PHASE1_END=$(date +%s)
     PHASE1_DURATION=$((PHASE1_END - PHASE1_START))
@@ -285,28 +411,44 @@ phase1_corporate_actions_fundamentals() {
 
 phase2_daily_price_data() {
     print_header "PHASE 2: Daily Price Data (S3)"
-    update_progress "2" "daily_price_data" "running" "Downloading 10 years of daily price data"
+    update_progress "2" "daily_price_data" "running" "Downloading daily price data from S3"
 
     PHASE2_START=$(date +%s)
 
-    log "Starting S3 daily price data download (2015-2025)..."
+    log "Starting S3 daily price data download..."
+    log_info "Stocks daily: 2020-10-26 onwards"
+    log_info "Options daily: 2023-10-24 onwards"
     log_info "Using aggressive parallelization: $MAX_S3_DOWNLOADS concurrent downloads"
 
-    # Download and ingest daily data for last 10 years
+    # Download and ingest daily data based on available S3 access
     DOWNLOAD_PIDS=()
 
-    for YEAR in {2015..2025}; do
-        for MONTH in {01..12}; do
+    # Stocks daily: 2020-10-26 to present
+    STOCKS_START_YEAR=2020
+    STOCKS_START_MONTH=10
+
+    # Options daily: 2023-10-24 to present
+    OPTIONS_START_YEAR=2023
+    OPTIONS_START_MONTH=10
+
+    CURRENT_YEAR=$(date +%Y)
+    CURRENT_MONTH=$(date +%m)
+
+    # Download stocks daily (2020-10 onwards)
+    for YEAR in $(seq $STOCKS_START_YEAR $CURRENT_YEAR); do
+        START_MONTH=01
+        if [ "$YEAR" -eq "$STOCKS_START_YEAR" ]; then
+            START_MONTH=$STOCKS_START_MONTH
+        fi
+
+        for MONTH in $(seq -w $START_MONTH 12); do
             # Skip future months
-            CURRENT_YEAR=$(date +%Y)
-            CURRENT_MONTH=$(date +%m)
             if [ "$YEAR" -eq "$CURRENT_YEAR" ] && [ "$MONTH" -gt "$CURRENT_MONTH" ]; then
                 continue
             fi
 
-            log_info "Downloading: $YEAR-$MONTH"
+            log_info "Downloading stocks_daily: $YEAR-$MONTH"
 
-            # Use quantmini data download command
             quantmini data download \
                 --data-type stocks_daily \
                 --start-date "${YEAR}-${MONTH}-01" \
@@ -322,14 +464,53 @@ phase2_daily_price_data() {
         done
     done
 
-    log_info "Waiting for S3 downloads to complete..."
+    # Download options daily (2023-10 onwards)
+    for YEAR in $(seq $OPTIONS_START_YEAR $CURRENT_YEAR); do
+        START_MONTH=01
+        if [ "$YEAR" -eq "$OPTIONS_START_YEAR" ]; then
+            START_MONTH=$OPTIONS_START_MONTH
+        fi
+
+        for MONTH in $(seq -w $START_MONTH 12); do
+            # Skip future months
+            if [ "$YEAR" -eq "$CURRENT_YEAR" ] && [ "$MONTH" -gt "$CURRENT_MONTH" ]; then
+                continue
+            fi
+
+            log_info "Downloading options_daily: $YEAR-$MONTH"
+
+            quantmini data download \
+                --data-type options_daily \
+                --start-date "${YEAR}-${MONTH}-01" \
+                --end-date "${YEAR}-${MONTH}-31" \
+                2>&1 | tee -a "$LOG_FILE" &
+
+            DOWNLOAD_PIDS+=($!)
+
+            # Limit concurrent downloads
+            if [ ${#DOWNLOAD_PIDS[@]} -ge $MAX_S3_DOWNLOADS ]; then
+                wait -n
+            fi
+        done
+    done
+
+    log_info "Waiting for all S3 downloads to complete..."
     wait
 
-    # Ingest to Bronze layer
-    log "Starting Bronze layer ingestion..."
+    # Ingest to Bronze layer - Stocks Daily
+    log "Starting Bronze layer ingestion for stocks_daily..."
     python "$PROJECT_ROOT/scripts/ingestion/landing_to_bronze.py" \
         --data-type stocks_daily \
-        --start-date 2015-01-01 \
+        --start-date 2020-10-26 \
+        --end-date $(date +%Y-%m-%d) \
+        --processing-mode batch \
+        2>&1 | tee -a "$LOG_FILE"
+
+    # Ingest to Bronze layer - Options Daily
+    log "Starting Bronze layer ingestion for options_daily..."
+    python "$PROJECT_ROOT/scripts/ingestion/landing_to_bronze.py" \
+        --data-type options_daily \
+        --start-date 2023-10-24 \
         --end-date $(date +%Y-%m-%d) \
         --processing-mode batch \
         2>&1 | tee -a "$LOG_FILE"

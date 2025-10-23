@@ -51,7 +51,9 @@ def calculate_technical_indicators(df: pl.DataFrame) -> pl.DataFrame:
 def main():
     """Run Silver layer feature engineering test"""
 
-    TEST_DIR = Path('/Users/zheyuanzhao/workspace/quantmini/test_pipeline')
+    # Use project-relative path instead of absolute path
+    PROJECT_ROOT = Path(__file__).parent.parent.parent
+    TEST_DIR = PROJECT_ROOT / 'test_pipeline'
     BRONZE_DIR = TEST_DIR / 'bronze' / 'news' / 'news'
     SILVER_DIR = TEST_DIR / 'silver' / 'news'
 

@@ -317,7 +317,7 @@ hardware:
 **Old way** (multiple files, hardcoded paths):
 ```python
 # ❌ Old: Hardcoded paths everywhere
-data_root = Path('/Volumes/sandisk/quantmini-data')
+data_root = Path('/Volumes/sandisk/quantlake')
 bronze_path = data_root / 'parquet'
 ```
 
